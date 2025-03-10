@@ -1,4 +1,4 @@
-"---
+---
 title: "Macula Densa snRNAseq analysis"
 author: "Jonathan Nelson"
 date: "`r format(Sys.time(), '%d %B %Y')`"
@@ -170,7 +170,7 @@ VlnPlot(SO_merge, "percent.mt", group.by = "treatment")
 
 # Initial Clustering
 
-```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, results='hide'}
 
 SO_merge <- SCTransform(SO_merge) %>%
     RunPCA() %>%
@@ -210,11 +210,9 @@ FeaturePlot(SO_merge, "Slc12a1")
 
 ```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
 
-DefaultAssay(SO_merge) <- "RNA"
+DefaultAssay(SO_merge) <- "SCT"
 
 ls_markers <- FindMarkers(SO_merge, ident.1 = "low_salt", group.by = "treatment", subset.ident = "0" )
-
-# arrange ls_markers by ave_log2FC in decending order with dplyr and filter to only include genes with an average pval_adj < 0.05
 
 ls_markers_up <- ls_markers %>% 
   filter(p_val_adj < 0.05) %>% 
@@ -226,7 +224,7 @@ ls_markers_down <- ls_markers %>%
   filter(p_val_adj < 0.05) %>% 
   arrange(avg_log2FC)
 
-ls_markers_down 
+ls_markers_down
 
 ```
 
@@ -250,11 +248,19 @@ VlnPlot(SO_merge, "Cxcl14", group.by = "treatment")
 
 VlnPlot(SO_merge, "Sema3c", group.by = "treatment")
 
-
-
 VlnPlot(SO_merge, "Fgf9", group.by = "treatment")
 
 VlnPlot(SO_merge, "Egfl6", group.by = "treatment")
+
+```
+
+# Save Seurat Object
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+SO_merge
+
+saveRDS(SO_merge, here("outputs", "so_merge_raw.rds"))
 
 ```
 
