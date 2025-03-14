@@ -1,0 +1,344 @@
+---
+title: "Macula Densa snRNAseq Quality Control"
+author: "Jonathan Nelson"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: bootstrap
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("BiocManager")) {install.packages("BiocManager"); require("BiocManager")}
+if (!require("tibble")) {install.packages("tibble"); require("tibble")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")} #color
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("kableExtra")) {install.packages("kableExtra"); require("kableExtra")} # for color brewer
+if (!require("gplots")) {install.packages("gplots"); require("gplots")} # for color brewer
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+library("EnhancedVolcano")
+library(UpSetR)
+library(ComplexHeatmap)
+#install.packages("ggtext")
+library(ggtext)
+library(CellChat)
+library(patchwork)
+options(stringsAsFactors = FALSE)
+
+```
+
+```{r}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+# Load Raw Macula Densa .rds file
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+SO <- readRDS(here("outputs", "so_merge_raw.rds"))
+
+head(SO@meta.data)
+
+DimPlot(SO)
+
+```
+
+## nFeatures, nCounts, and percent.mt
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+VlnPlot(SO, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), group.by = "orig.ident")
+
+VlnPlot(SO, features = c("nFeature_RNA", "nCount_RNA", "percent.mt"), group.by = "sample")
+
+FeaturePlot(SO, "nCount_RNA")
+
+FeaturePlot(SO, "nFeature_RNA")
+
+FeaturePlot(SO, "percent.mt")
+
+```
+
+
+
+## Identify clusters
+
+### Cluster 0: MD1
+### Cluster 1: MD2
+### Cluster 2: MD: Activated (cFos)
+### Cluster 3: EC (Pecam1)
+### Cluster 4: Stroma (Vim)
+### Cluster 5: CD (Aqp2)
+### Cluster 6: IC (Kit)
+### Cluster 7: PT (Slc34a1)
+
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=10}
+
+SO.markers <- FindAllMarkers(SO, only.pos = TRUE)
+SO.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+SO.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 5) %>%
+    ungroup() -> top10
+DoHeatmap(SO, features = top10$gene) + NoLegend()
+
+markers.to.plot1 <- c("Lrp2",         # PT
+                      "Slc5a12",      # PT-S1
+                      "Slc13a3",      # PT-S2
+                      "Slc16a9",      # PT-S3
+                      "Havcr1",       # Injured PT
+                      "Epha7",        # dTL
+                      "Cryab",        # dTL
+                      "Cdh13",        # dTL1
+                      "Slc14a2",      # dTL2
+                      "Slc12a1",      # TAL
+                      "Umod",         # TAL, DCT1
+                      "Egf",          # TAL, DCT1,
+                      "Cldn10",       # TAL
+                      "Cldn16",       # TAL
+                      "Nos1",         # MD
+                      "Slc12a3",      # DCT
+                      "Pvalb",        # DCT1
+                      "Slc8a1",       # DCT2, CNT
+                      "Aqp2",         # PC
+                      "Slc4a1",       # IC-A
+                      "Slc26a4",      # IC-B
+                      "Nphs1",        # Podo
+                      "Ncam1",        # PEC
+                      "Flt1",         # Endo
+                      "Emcn",         # Glom Endo
+                      "Kdr",          # Capillary Endo
+                      "Pdgfrb",       # Perivascular
+                      "Pdgfra",       # Fib
+                      "Piezo2",       # Mesangial
+                      "Acta2",        # Mural
+                      "Ptprc",        # Immune
+                      "Cd74",         # Macrophage
+                      "Skap1",        # B/T Cells 
+                      "Upk1b",        # Uro
+                      "Top2a"         # Proliferation
+)
+                      
+DotPlot(SO,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+
+```
+
+## Check FeaturePlot/VlnPlot
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+
+
+### Cluster 2: MD: Activated (cFos)
+### Cluster 3: 
+### Cluster 4: EC (Pecam1)
+### Cluster 5: CD (Aqp2)
+### Cluster 6: IC (Kit)
+### Cluster 7: PT (Slc34a1)
+
+FeaturePlot(SO, "Nos1")
+VlnPlot(SO, features = "Nos1")
+
+FeaturePlot(SO, "Pappa2")
+VlnPlot(SO, features = "Pappa2")
+
+FeaturePlot(SO, "Slc12a1")
+VlnPlot(SO, features = "Slc12a1")
+
+FeaturePlot(SO, "Fos")
+VlnPlot(SO, features = "Fos")
+
+FeaturePlot(SO, "Pecam1")
+VlnPlot(SO, features = "Pecam1")
+
+FeaturePlot(SO, "Aqp2")
+VlnPlot(SO, features = "Aqp2")
+
+FeaturePlot(SO, "Kit")
+VlnPlot(SO, features = "Kit")
+
+FeaturePlot(SO, "Slc34a1")
+VlnPlot(SO, features = "Slc34a1")
+
+```
+
+# Filter non-MD Cells and re-cluster
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+SO2 <- subset(SO, idents = c("4", "5", "6", "7"), invert = TRUE)
+
+DimPlot(SO2)
+
+SO2 <- SCTransform(SO2) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:30) %>%
+    FindClusters() %>%
+    RunUMAP(dims = 1:30)
+
+DimPlot(SO2)
+
+markers.to.plot2 <- c("Lrp2",         # PT
+                      "Slc5a12",      # PT-S1
+                      "Slc13a3",      # PT-S2
+                      "Slc16a9",      # PT-S3
+                      "Havcr1",       # Injured PT
+                      "Epha7",        # dTL
+                      "Cryab",        # dTL
+                      "Cdh13",        # dTL1
+                      "Slc14a2",      # dTL2
+                      "Slc12a1",      # TAL
+                      "Umod",         # TAL, DCT1
+                      "Egf",          # TAL, DCT1,
+                      "Cldn10",       # TAL
+                      "Cldn16",       # TAL
+                      "Nos1",         # MD
+                      "Slc12a3",      # DCT
+                      "Pvalb",        # DCT1
+                      "Slc8a1",       # DCT2, CNT
+                      "Aqp2",         # PC
+                      "Slc4a1",       # IC-A
+                      "Slc26a4",      # IC-B
+                      "Nphs1",        # Podo
+                      "Ncam1",        # PEC
+                      "Flt1",         # Endo
+                      "Emcn",         # Glom Endo
+                      "Kdr",          # Capillary Endo
+                      "Pdgfrb",       # Perivascular
+                      "Pdgfra",       # Fib
+                      "Piezo2",       # Mesangial
+                      "Acta2",        # Mural
+                      "Ptprc",        # Immune
+                      "Cd74",         # Macrophage
+                      "Skap1",        # B/T Cells 
+                      "Upk1b",        # Uro
+                      "Top2a",         # Proliferation
+                      "Cldn5",
+                      "Jun",
+                      "Fosb"
+)
+                      
+DotPlot(SO2,
+features = markers.to.plot2,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+FeaturePlot(SO2, "Slc12a3")
+FeaturePlot(SO2, "Fosb")
+FeaturePlot(SO2, "Cldn5")
+
+
+DimPlot(SO2, group.by = "treatment")
+
+
+
+
+```
+
+
+# Subset and recluster
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+SO3 <- subset(SO2, idents = c("13"), invert = TRUE)
+
+DimPlot(SO3)
+
+SO3 <- SCTransform(SO3) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:10) %>%
+    FindClusters(resolution = .3) %>%
+    RunUMAP(dims = 1:10)
+
+DimPlot(SO3)
+
+SO.markers <- FindAllMarkers(SO3, only.pos = TRUE)
+
+SO.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > .5) %>%
+    slice_head(n = 10) %>%
+    ungroup() -> top10
+
+DoHeatmap(SO3, features = top10$gene) + NoLegend()
+
+FeaturePlot(SO3, "Nos1")
+VlnPlot(SO3, "Nos1", split.by = "treatment")
+VlnPlot(SO3, "Nos1", split.by = "sample")
+
+FeaturePlot(SO3, "Pappa2")
+VlnPlot(SO3, "Pappa2", split.by = "treatment")
+VlnPlot(SO3, "Pappa2", split.by = "sample")
+
+FeaturePlot(SO3, "Atp1a1")
+VlnPlot(SO3, "Atp1a1", split.by = "treatment")
+VlnPlot(SO3, "Atp1a1", split.by = "sample")
+
+FeaturePlot(SO3, "Cxcl10")
+VlnPlot(SO3, "Cxcl10", split.by = "treatment")
+VlnPlot(SO3, "Cxcl10", split.by = "sample")
+
+FeaturePlot(SO3, "Cox5b")
+VlnPlot(SO3, "Cox5b", split.by = "treatment")
+VlnPlot(SO3, "Cox5b", split.by = "sample")
+
+VlnPlot(SO3, "percent.mt", split.by = "treatment")
+
+```
+# Session Info
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+sessionInfo()
+
+```
+
+
+  
