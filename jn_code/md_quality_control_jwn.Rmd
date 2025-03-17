@@ -169,7 +169,9 @@ coord_flip()
 
 ```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
 
-
+df_5 <- FindMarkers(SO, ident.1 = 5, min.pct = 0.25)
+df_5_rownames <- rownames(df_5)
+df_5_rownames
 
 ### Cluster 2: MD: Activated (cFos)
 ### Cluster 3: 
@@ -201,6 +203,8 @@ VlnPlot(SO, features = "Kit")
 
 FeaturePlot(SO, "Slc34a1")
 VlnPlot(SO, features = "Slc34a1")
+
+
 
 ```
 
