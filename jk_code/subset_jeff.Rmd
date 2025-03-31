@@ -1,0 +1,447 @@
+---
+title: "Rmarkdown Subset Analysis"
+author: "jeff karnsomprot"
+date: "2025-03-17"
+output: html_document
+---
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("BiocManager")) {install.packages("BiocManager"); require("BiocManager")}
+if (!require("tibble")) {install.packages("tibble"); require("tibble")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")} #color
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("kableExtra")) {install.packages("kableExtra"); require("kableExtra")} # for color brewer
+if (!require("gplots")) {install.packages("gplots"); require("gplots")} # for color brewer
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("plotly")) {install.packages("plotly"); require("plotly")}
+library("EnhancedVolcano")
+
+
+```
+
+
+```{r}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+
+``` {r}
+
+SO1 <- LoadSeuratRds(here("outputs", "so_merge_raw.rds"))
+
+head(SO1@meta.data)
+```
+
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=10}
+
+SO.markers <- FindAllMarkers(SO1, only.pos = TRUE)
+SO.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+SO.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 5) %>%
+    ungroup() -> top10
+DoHeatmap(SO1, features = top10$gene) + NoLegend()
+
+markers.to.plot1 <- c("Lrp2",         # PT
+                      "Slc5a12",      # PT-S1
+                      "Slc13a3",      # PT-S2
+                      "Slc16a9",      # PT-S3
+                      "Havcr1",       # Injured PT
+                      "Epha7",        # dTL
+                      "Cryab",        # dTL
+                      "Cdh13",        # dTL1
+                      "Slc14a2",      # dTL2
+                      "Slc12a1",      # TAL
+                      "Umod",         # TAL, DCT1
+                      "Egf",          # TAL, DCT1,
+                      "Cldn10",       # TAL
+                      "Cldn16",       # TAL
+                      "Nos1",         # MD
+                      "Slc12a3",      # DCT
+                      "Pvalb",        # DCT1
+                      "Slc8a1",       # DCT2, CNT
+                      "Aqp2",         # PC
+                      "Slc4a1",       # IC-A
+                      "Slc26a4",      # IC-B
+                      "Nphs1",        # Podo
+                      "Ncam1",        # PEC
+                      "Flt1",         # Endo
+                      "Emcn",         # Glom Endo
+                      "Kdr",          # Capillary Endo
+                      "Pdgfrb",       # Perivascular
+                      "Pdgfra",       # Fib
+                      "Piezo2",       # Mesangial
+                      "Acta2",        # Mural
+                      "Ptprc",        # Immune
+                      "Cd74",         # Macrophage
+                      "Skap1",        # B/T Cells 
+                      "Upk1b",        # Uro
+                      "Top2a"         # Proliferation
+)
+                      
+DotPlot(SO1,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+DimPlot(SO1)
+
+```
+Macula Densa Cells would Express a lot of Nos1
+In this case only clusters 0-3 express a lot of Nos1 and also some TAL which would be expressed a lot at the macula densa. 
+
+Cluster Identification
+
+Cluster 0 - MD
+Cluster 1 - MD - TAL 
+Cluster 2 - MD 
+Cluster 3 - MD
+Cluster 4 - Glom Endo
+Cluster 5 - Principal Cell
+Cluster 6 - IC
+Cluster 7 - PT
+
+Making Sure 
+```{r}
+
+FeaturePlot(SO1, "Pappa2",split.by = "treatment")
+FeaturePlot(SO1, "Nos1",split.by = "treatment")
+
+VlnPlot(SO1, features = "Pappa2",split.by = "sample")
+
+FeaturePlot(SO1, "Aqp2",split.by = "treatment")
+
+FeaturePlot(SO1, "Lrp2",split.by = "treatment")
+
+
+```
+
+``` {r}
+
+SO2 <- subset(SO1, idents = c("4", "5", "6", "7"), invert = TRUE)
+
+DimPlot(SO2)
+
+SO2 <- SCTransform(SO2, verbose = F)
+SO2 <- RunPCA(SO2, verbose = F)
+ElbowPlot(SO2)
+
+SO2 <- RunUMAP(SO2, dims = 1:30, verbose = F)
+SO2 <- FindNeighbors(SO2, dims = 1:30, verbose = F)
+SO2 <- FindClusters(SO2, resolution = .5)
+
+DimPlot(SO2)
+
+SO.markers2 <- FindAllMarkers(SO2, only.pos = TRUE)
+SO.markers2 %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+SO.markers2 %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 5) %>%
+    ungroup() -> top10_S2
+DoHeatmap(SO2, features = top10_S2$gene) + NoLegend()
+
+markers.to.plot1 <- c("Lrp2",         # PT
+                      "Slc5a12",      # PT-S1
+                      "Slc13a3",      # PT-S2
+                      "Slc16a9",      # PT-S3
+                      "Havcr1",       # Injured PT
+                      "Epha7",        # dTL
+                      "Cryab",        # dTL
+                      "Cdh13",        # dTL1
+                      "Slc14a2",      # dTL2
+                      "Slc12a1",      # TAL
+                      "Umod",         # TAL, DCT1
+                      "Egf",          # TAL, DCT1,
+                      "Cldn10",       # TAL
+                      "Cldn16",       # TAL
+                      "Nos1",         # MD
+                      "Slc12a3",      # DCT
+                      "Pvalb",        # DCT1
+                      "Slc8a1",       # DCT2, CNT
+                      "Aqp2",         # PC
+                      "Slc4a1",       # IC-A
+                      "Slc26a4",      # IC-B
+                      "Nphs1",        # Podo
+                      "Ncam1",        # PEC
+                      "Flt1",         # Endo
+                      "Emcn",         # Glom Endo
+                      "Kdr",          # Capillary Endo
+                      "Pdgfrb",       # Perivascular
+                      "Pdgfra",       # Fib
+                      "Piezo2",       # Mesangial
+                      "Acta2",        # Mural
+                      "Ptprc",        # Immune
+                      "Cd74",         # Macrophage
+                      "Skap1",        # B/T Cells 
+                      "Upk1b",        # Uro
+                      "Top2a",
+                      "Pappa2",
+                      "Ptgs2", # Proliferation
+                      "Jun"
+)
+                      
+                      
+DotPlot(SO2,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+DimPlot(SO2)
+
+
+
+#Nos1
+                    #  "Pappa2",       # Macula Densa
+                    #  "Ptgs2",        # Macula Densa
+                     # "Slc12a1",
+                     # "Cxcl14",
+                     # "Sema3c",
+                     # "Fgf9",
+                    #  "Egfl6"
+
+```
+According to the Heatmap Cluster 2 and 7 Display similar top genes,
+According to the Multidimensional DotPlot Cluster 10 has a good amount of Cryab which is a marker for dTL
+
+
+PLAN after visiting : deep dive into cluster 10, and maybe clean it further 
+
+
+``` {r}
+
+FeaturePlot(SO2,"Pappa2",split.by =  "treatment")
+FeaturePlot(SO2, "Nos1",split.by = "treatment")
+DimPlot(SO2,split.by = "sample",group.by = "sample")
+
+FeaturePlot(SO2,"Ptgs2",split.by =  "treatment")
+FeaturePlot(SO2,"Slc12a1",split.by =  "treatment")
+FeaturePlot(SO2,"Fgf9",split.by =  "treatment")
+
+FeaturePlot(SO2,"Fosb",split.by =  "treatment")
+FeaturePlot(SO2,"Cldn5",split.by =  "treatment")
+
+DimPlot(SO2, group.by = "treatment")
+DimPlot(SO2)
+
+
+
+```
+
+
+``` {r}
+
+FeaturePlot(SO2,"Cryab",split.by =  "sample")
+FeaturePlot(SO2,"Epha7",split.by =  "sample")
+
+
+```
+
+``` {r}
+
+SO_10 <- subset(SO2, idents = c("10"))
+
+SO_10 <- RunUMAP(SO_10, dims = 1:30, verbose = F)
+SO_10 <- FindNeighbors(SO_10, dims = 1:30, verbose = F)
+SO_10 <- FindClusters(SO_10, resolution = .5)
+
+SO.markers2 <- FindAllMarkers(SO_10, only.pos = TRUE)
+SO.markers2 %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+SO.markers2 %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 5) %>%
+    ungroup() -> top10_S2
+DoHeatmap(SO_10, features = top10_S2$gene) + NoLegend()
+ DimPlot(SO_10)               
+ 
+FeaturePlot(SO_10,"Slc12a1",split.by =  "treatment")
+FeaturePlot(SO_10,"Cryab",split.by =  "treatment")
+
+DotPlot(SO_10,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+```
+
+
+So The cells here that express Jun dont really express Slc12a1 and vice versa, deciding to go see connections between Jun and Slc12a1.
+
+
+Clusters 6, 7, 10 show Cryab a tiny bit
+
+
+
+
+
+``` {r}
+
+DimPlot(SO2)
+FeaturePlot(SO2,"Junb")
+
+library(plotly)
+
+dim_plot <- DimPlot(SO2, reduction = "umap") +
+  ggtitle("UMAP Dimensional Reduction")
+interactive_plot <- ggplotly(dim_plot)
+
+# Display the interactive plot
+interactive_plot
+
+```
+I feel like the clusters are 5 
+
+9 is its own cluster
+2 and 7 are own cluster
+6 is its own cluster
+1 and 4 maybe
+0 and 3 5
+
+
+
+``` {r}
+
+
+2222
+SO3 <- FindNeighbors(SO2, dims = 1:30, verbose = F)
+SO3 <- FindClusters(SO2, resolution = 1)
+
+
+SO.markers3 <- FindAllMarkers(SO3, only.pos = TRUE)
+SO.markers3 %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+SO.markers3 %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 5) %>%
+    ungroup() -> top10_S3
+DoHeatmap(SO3, features = top10_S3$gene) + NoLegend()
+DimPlot(SO3)
+dim_plot <- DimPlot(SO3, reduction = "umap") +
+  ggtitle("UMAP Dimensional Reduction")
+interactive_plot <- ggplotly(dim_plot)
+
+# Display the interactive plot
+interactive_plot
+
+FeaturePlot(SO3,"Cxcl10")
+FeaturePlot(SO3,"S100g")
+# Only in a specific Cluster
+
+```
+
+``` {r}
+SO4 <- FindNeighbors(SO2, dims = 1:30, verbose = F)
+SO4 <- FindClusters(SO2, resolution = 0.35)
+
+DimPlot(SO4)
+DotPlot(SO4,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+SO5 <- subset(SO4, idents = c("0","1","2","3","4","5"))
+SO5 <- FindNeighbors(SO5, dims = 1:30, verbose = F)
+SO5 <- FindClusters(SO5, resolution = 0.25)
+DimPlot(SO5)
+DotPlot(SO5,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+SO5m <- FindAllMarkers(SO5, only.pos = TRUE)
+SO5m %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+SO5m %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 5) %>%
+    ungroup() -> top10
+DoHeatmap(SO5, features = top10$gene) + NoLegend()
+DimPlot(SO5)
+FeaturePlot(SO5,"S100g",split.by = "treatment") #cluster
+FeaturePlot(SO5,"Junb",split.by = "treatment") # cluster
+FeaturePlot(SO5,"Cxcl10",split.by = "treatment") # cluster
+FeaturePlot(SO5,"Pappa2",split.by = "treatment")
+DimPlot(SO5,split.by = "treatment")
+
+```
+
+```{r}
+# SO6 checking another cluster
+SO6<- subset(SO5, idents = c("0","1","3"))
+
+SO6 <- FindNeighbors(SO6, dims = 1:30, verbose = F)
+SO6 <- FindClusters(SO6, resolution = 0.2)
+
+DimPlot(SO6,split.by = "sample")
+SO6m <- FindAllMarkers(SO6, only.pos = TRUE)
+SO6m %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+SO6m %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 20) %>%
+    ungroup() -> top10_6
+DoHeatmap(SO6, features = top10_6$gene) + NoLegend()
+
+```
