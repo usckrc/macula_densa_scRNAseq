@@ -302,7 +302,8 @@ dot.min = 0,
 scale.max = 100,
 scale.min = 0,
 col.min = -2.5,
-col.max = 2.5)+
+col.max = 2.5,
+scale = FALSE)+
 coord_flip()
 
 ```
@@ -344,8 +345,6 @@ I feel like the clusters are 5
 
 ``` {r}
 
-
-2222
 SO3 <- FindNeighbors(SO2, dims = 1:30, verbose = F)
 SO3 <- FindClusters(SO2, resolution = 1)
 
@@ -422,6 +421,24 @@ FeaturePlot(SO5,"Cxcl10",split.by = "treatment") # cluster
 FeaturePlot(SO5,"Pappa2",split.by = "treatment")
 DimPlot(SO5,split.by = "treatment")
 
+
+SO5@meta.data <- SO5@meta.data %>% mutate(subclass = dplyr::case_when(
+  seurat_clusters == 0 ~ "IDK",
+  seurat_clusters == 1 ~ "IDK",
+  seurat_clusters == 2 ~ "Umod",
+  seurat_clusters == 3 ~ "IDK",
+  seurat_clusters == 4 ~ "Jun",
+  seurat_clusters == 5 ~ "Cxcl10",
+  TRUE ~ "Unknown"  # Default label for any other clusters
+))
+  
+DimPlot(SO5,group.by = "subclass")
+
+SO6 <- FindNeighbors(SO6, dims = 1:30, verbose = F)
+SO6 <- FindClusters(SO6, resolution = 0.2)
+
+DimPlot(SO6,split.by = "sample")
+
 ```
 
 ```{r}
@@ -437,11 +454,24 @@ SO6m %>%
     group_by(cluster) %>%
     dplyr::filter(avg_log2FC > 1)
 
-SO6m %>%
-    group_by(cluster) %>%
-    dplyr::filter(avg_log2FC > 1) %>%
-    slice_head(n = 20) %>%
-    ungroup() -> top10_6
 DoHeatmap(SO6, features = top10_6$gene) + NoLegend()
+DimPlot(SO6,split.by = "sample")
+
+DimPlot(SO6,split.by = "sample", group.by = "treatment" )
+head(SO6@meta.data)
+
+FeaturePlot(SO6,"Pappa2",split.by = "sample")
+
+```
+
+``` {r}
+
+PercentageFeatureSet(SO6,pattern="^Rp") -> SO6$percent.ribo
+
+head(SO6)
+VlnPlot(SO6,"percent.ribo",group.by = "sample")
+VlnPlot(SO6,"percent.ribo")
+
+head(SO6@meta.data)
 
 ```
