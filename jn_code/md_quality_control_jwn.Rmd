@@ -52,6 +52,7 @@ library(ggtext)
 library(CellChat)
 library(patchwork)
 options(stringsAsFactors = FALSE)
+here()
 
 ```
 
@@ -59,7 +60,8 @@ options(stringsAsFactors = FALSE)
 options(future.globals.maxSize = 74 * 1024^3) # 55 GB
 getOption("future.globals.maxSize") #59055800320
 ```
-# Load Raw Macula Densa .rds file
+
+# Load Macula Densa .rds file
 
 ```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
 
@@ -336,6 +338,17 @@ VlnPlot(SO3, "Cox5b", split.by = "sample")
 VlnPlot(SO3, "percent.mt", split.by = "treatment")
 
 ```
+
+## Save Object
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+saveRDS(SO3, file = here("outputs", "MD_jwn_v1.rds"))
+
+```
+
+
+
 # Session Info
 
 ```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
