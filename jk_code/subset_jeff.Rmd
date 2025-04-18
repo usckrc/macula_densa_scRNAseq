@@ -4,6 +4,22 @@ author: "jeff karnsomprot"
 date: "2025-03-17"
 output: html_document
 ---
+
+# Macula Densa Project
+
+## Objectives 
+
+Three Main Goals of this File
+Produce Cleaner looking code. 
+Identify the amount of clusters there are
+Identify the top genes expressed in each of the clusters
+
+
+## Problems I need to Fix
+Save things as RDS file so I dont have to rerun the whole code
+
+# Loading in Data sets + Library packages.
+
 ```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
 
 if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
@@ -421,6 +437,7 @@ FeaturePlot(SO5,"Cxcl10",split.by = "treatment") # cluster
 FeaturePlot(SO5,"Pappa2",split.by = "treatment")
 DimPlot(SO5,split.by = "treatment")
 
+Idents(SO5) <- SO5@meta.data$subclass
 
 SO5@meta.data <- SO5@meta.data %>% mutate(subclass = dplyr::case_when(
   seurat_clusters == 0 ~ "IDK",
@@ -438,6 +455,9 @@ SO6 <- FindNeighbors(SO6, dims = 1:30, verbose = F)
 SO6 <- FindClusters(SO6, resolution = 0.2)
 
 DimPlot(SO6,split.by = "sample")
+
+saveRDS(SO5, file = "SO5.rds")
+
 
 ```
 
