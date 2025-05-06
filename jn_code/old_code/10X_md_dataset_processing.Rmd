@@ -1,0 +1,180 @@
+---
+title: "Processing 10X Slc12a1 Lineage MD Cells"
+author: "Jonathan Nelson"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: bootstrap
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("BiocManager")) {install.packages("BiocManager"); require("BiocManager")}
+if (!require("tibble")) {install.packages("tibble"); require("tibble")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")} #color
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("kableExtra")) {install.packages("kableExtra"); require("kableExtra")} # for color brewer
+if (!require("gplots")) {install.packages("gplots"); require("gplots")} # for color brewer
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+library("EnhancedVolcano")
+library(UpSetR)
+library(ComplexHeatmap)
+#install.packages("ggtext")
+library(ggtext)
+library(CellChat)
+library(patchwork)
+library(sjmisc)
+options(stringsAsFactors = FALSE)
+
+```
+
+# Slc12a1-Lineage
+
+# Load Dataset
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+SO_TAL <- readRDS(here("Datasets", "TAL_TenX.rds"))
+
+Idents(SO_TAL) <- SO_TAL@meta.data$class.TAL
+
+head(SO_TAL@meta.data)
+
+DimPlot(SO_TAL)
+
+SO_TAL2 <- subset(x = SO_TAL, subset = class.TAL == "MD")
+
+DimPlot(SO_TAL2)
+
+SO_TAL2
+
+SO_TAL3 <- SCTransform(SO_TAL2) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:30) %>%
+    FindClusters() %>%
+    RunUMAP(dims = 1:30)
+
+
+DimPlot(SO_TAL3)
+
+df <- FindAllMarkers(SO_TAL3, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+df %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > .5) %>%
+    slice_head(n = 10) %>%
+    ungroup() -> top10
+
+DoHeatmap(SO_TAL3, features = top10$gene) + NoLegend()
+
+
+
+Idents(SO_TAL2) <- SO_TAL2@meta.data$orig.ident
+
+head(SO_TAL2@meta.data)
+
+SO_TAL3 <- subset(x = SO_TAL2, downsample = 2110)
+
+DimPlot(SO_TAL3, group.by = "class.TAL")
+
+FeaturePlot(SO_TAL3, features = c("Slc12a1", "Cldn10", "Cldn16", "Nos1", "Umod"))
+
+VlnPlot(SO_TAL3, "Umod")
+VlnPlot(SO_TAL3, "Egf")
+VlnPlot(SO_TAL3, "Tmem52b")
+VlnPlot(SO_TAL3, "Ckb")
+
+VlnPlot(SO_TAL3, "Car15")
+VlnPlot(SO_TAL3, "Pappa2")
+
+VlnPlot(SO_TAL3, "nCount_RNA")
+
+list <- c("Scn1a", "Scn2a", "Scn3a", "Scn8a",
+"Kcnc1", "Kcnc2", "Kcnc3",
+"Kcna1", "Kcna2",
+"Hcn1", "Hcn2", "Hcn3", "Hcn4",
+"Cacna1g", "Cacna1h",
+"Tbx3",
+"Npy", "Vip", "Pvalb", "Sst",
+"Nsmf", "Ndrg4",
+"Bdnf", "Ntrk2",
+"Foxp1", "Foxp2",
+"Tbr1", "Satb2",
+"Gabra1", "Gabrg2", "Gabrb3",
+"Gria1", "Grin2b",
+"Adra2a", "Drd2", "Htr2a",
+"Rgs4")
+
+for (i in list) {
+  p1 <- VlnPlot(SO_TAL3, i)
+  print(p1)
+}
+
+
+list2 <- c("Nos1",        # Nitric oxide synthase, key macula densa signal
+"Ptgs2",       # COX-2, involved in prostaglandin production
+"Slc12a1",     # NKCC2 transporter for Na-K-2Cl sensing
+"Ptger3",      # PGE2 receptor
+"Ptger4",      # Alternative PGE2 receptor
+"Calb1",       # Calcium signaling
+"Tgfb1",       # TGF signaling involvement
+"Cox4i2",      # Macula densa-enriched oxidative stress sensor
+"Aqp1",        # Water transport
+"Clcnkb",      # Chloride channel
+"Ren1",        # Renin, indirect signaling through JGA
+"Guca2b",      # Uroguanylin (possible natriuretic peptide signaling)
+"Pla2g4a",     # Phospholipase A2, upstream of prostaglandin synthesis
+"Npr3",        # Natriuretic peptide clearance receptor
+"Atp1a1",      # Na+/K+ ATPase alpha 1
+"Klk1",        # Kallikrein, vasoactive peptide
+"Adrb1",       # Beta-adrenergic receptor 1
+"Grk4",        # G protein–coupled receptor kinase (linked to Na sensing)
+"Slc9a3r1",    # NHERF1, involved in ion transporter regulation
+"Avpr1a"       # Vasopressin receptor
+)
+
+for (i in list2) {
+  p1 <- VlnPlot(SO_TAL3, i)
+  print(p1)
+}
+
+```
+
+# Session Info
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+sessionInfo()
+
+```
+
+
+  

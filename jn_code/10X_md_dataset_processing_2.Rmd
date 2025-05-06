@@ -1,0 +1,139 @@
+---
+title: "Processing 10X Slc12a1 Lineage MD Cells"
+author: "Jonathan Nelson"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: bootstrap
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("BiocManager")) {install.packages("BiocManager"); require("BiocManager")}
+if (!require("tibble")) {install.packages("tibble"); require("tibble")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")} #color
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("kableExtra")) {install.packages("kableExtra"); require("kableExtra")} # for color brewer
+if (!require("gplots")) {install.packages("gplots"); require("gplots")} # for color brewer
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+library("EnhancedVolcano")
+library(UpSetR)
+library(ComplexHeatmap)
+#install.packages("ggtext")
+library(ggtext)
+library(CellChat)
+library(patchwork)
+library(sjmisc)
+options(stringsAsFactors = FALSE)
+
+```
+
+# Slc12a1-Lineage Pip-seq
+
+## Load Dataset
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+SO_TAL <- readRDS(here("datasets", "TAL_TenX.rds"))
+
+head(SO_TAL@meta.data)
+
+Idents(SO_TAL) <- SO_TAL@meta.data$class.TAL
+
+DimPlot(SO_TAL)
+
+```
+
+## Subset MD Cells
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+
+SO_TAL2 <- subset(x = SO_TAL, subset = class.TAL == "MD")
+
+DimPlot(SO_TAL2)
+
+SO_TAL2
+
+```
+
+## Recluster MD Cells
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+SO_TAL3 <- SCTransform(SO_TAL2) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:30) %>%
+    FindClusters(resolution = 1) %>%
+    RunUMAP(dims = 1:30)
+
+DimPlot(SO_TAL3)
+
+```
+
+## FindMarkers
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.height=8}
+
+
+df <- FindAllMarkers(SO_TAL3, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+df
+
+df %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > .25) %>%
+    slice_head(n = 10) %>%
+    ungroup() -> top10
+
+DoHeatmap(SO_TAL3, features = top10$gene) + NoLegend()
+
+```
+
+
+## Save object
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+saveRDS(SO_TAL3, here("outputs", "TAL_TenX_MD.rds"))
+
+```
+
+# Session Info
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+sessionInfo()
+
+```
+
+
+  
