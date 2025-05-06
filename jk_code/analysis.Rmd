@@ -267,10 +267,174 @@ Multidimensional Dotplot (top genes that are expressed)
 Possibly Filter out Rp genes for 
 maybe mt too
 
+Annot objects
+
+Read Janos' article 
+
+Next less : 
+DEG list pathway analysis
+volcano plot 
+
+# Backtracking
 ```{r}
 
+DimPlot(SO5)
+# Check S100g so i Have to make this into more clusters.
+
+SO5_new <- RunUMAP(SO5, dims = 1:30, verbose = F)
+SO5_new <- FindNeighbors(SO5, dims = 1:30, verbose = F)
+SO5_new <- FindClusters(SO5, resolution = .4)
+
+# back tracking so an old one
+p <- DimPlot(SO5)
+w <- DimPlot(SO5_new)
+p+w
+
+# I thought 5 4 2 are its own cluster
+# So in this it would be cluster 
+# 8=5 , 4=5 , 2=2 , 
+# Cluster 6 should be the s100g cluster 
+
+SO5_m <- FindAllMarkers(SO5_new, only.pos = TRUE)
+SO5_m %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+SO5_m %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 5) %>%
+    ungroup() -> top10
+DoHeatmap(SO5_new, features = top10$gene) + NoLegend()
+p+w
+```
+
+Unknown from this is now still 0, 1,3, 4,
 
 
-``` 
+```{r}
+
+markers.to.plot1 <- c(
+  "S100g",    # 
+  "Atf3",     # 
+  "Egr1",     # 
+  "Fos",      # 
+  "Jun",      #
+  "Junb",     #
+  "Pappa2",   #
+  "Cxcl10",   # 
+  "Cldn19",   # 
+  "Krt7",     #
+  "Egf",      #
+  "Aard",
+  "Ptger3",
+  "Leng9",
+  "Ckb",
+  "Mcub",
+  "Fabp3",
+  "Ccn1",
+  "Foxq1",
+  "Cxcl12",
+  "Vash2",
+  "Pamr1",
+  "Vegfa",
+  "Nov"
+)
 
 
+                      
+                      
+DotPlot(SO5_new,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+
+# I feel like cluster 8 is a contaminate because the it shares a lot of similar genes with my "assumed clusters"
+```
+Cluster 0 = Aard, Mcub 
+
+Cluster 2 = Egf, Krt7, Cldn19 
+
+Cluster 4 = Ptger3 
+
+Cluster 5 = Junb, Jun, Fos, Egr1, Atf3 
+
+Cluster 6 = S100g
+
+Cluster 7 = Cxcl10 
+
+Cluster 3 = could be Leng9 but i feel thats so insignificant. 
+
+Cluster 1 = No idea.
+Missing genes for 1 and 3 
+
+# Subsetting contaminate
+```{r}
+
+SO7 <- subset(SO5_new, idents = "8", invert = TRUE)
+
+SO7 <- RunUMAP(SO7, dims = 1:30, verbose = F)
+SO7 <- FindNeighbors(SO7, dims = 1:30, verbose = F)
+SO7 <- FindClusters(SO7, resolution = .4)
+
+DimPlot(SO7)
+
+DotPlot(SO7,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+
+VlnPlot(SO7, features = "S100g")
+VlnPlot(SO7, features = "Cxcl10")
+VlnPlot(SO7, features = "Mcub")
+VlnPlot(SO7, features = "Aard")
+VlnPlot(SO7, features = "Egf")
+VlnPlot(SO7, features = "Ptger3")
+VlnPlot(SO7, features = "Leng9")
+VlnPlot(SO7, features = "Jun")
+
+
+```
+My assumptions have changed now that I have viewed violin plots. 
+
+
+I think the main clusters are 5, 6, 7, 2 
+
+I think 0, 1, 3, 4 are its own thing but just undergoing change? 
+
+Specifically I think 1 and 0 are the same and 4 and 3 maybe? 
+
+I think cluster 1 turns into 0 in low salt conditions and cluster 4 turns into 3. 
+Both 1 and 3 have Leng9 which is something thats expressed during evolutionary something like that.
+
+According to the Multidimensional dotplot 0 and 1 also look pretty identical minus the expression of a few specific genes but that may jsut be the product of change. 
+
+Not sure how to explain 4 and 3 though.
+# Analyzing 
+``` {r}
+
+DimPlot(SO7,split.by = "treatment")
+DimPlot(SO7,split.by = "sample")
+
+
+
+```
+
+SO1 and SO4 = Control
+SO2 and SO3 = low_salt
+
+Im guessing, the two Control samples were slightly different. One expressing more in each. They then used induced low salt into each of these two controls types and got SO2 and SO3 but they're different because of control.
+
+I think it might be a good idea to analyze maybe just SO1 and SO2 to see the change of 4 turning into 3 and analyzing SO4 and SO3 separate to see cluster 1 changing to 0.
