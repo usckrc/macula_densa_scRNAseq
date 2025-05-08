@@ -337,8 +337,7 @@ markers.to.plot1 <- c(
   "Cxcl12",
   "Vash2",
   "Pamr1",
-  "Vegfa",
-  "Nov"
+  "Vegfa"
 )
 
 
@@ -357,24 +356,8 @@ coord_flip()
 
 # I feel like cluster 8 is a contaminate because the it shares a lot of similar genes with my "assumed clusters"
 ```
-Cluster 0 = Aard, Mcub 
 
-Cluster 2 = Egf, Krt7, Cldn19 
-
-Cluster 4 = Ptger3 
-
-Cluster 5 = Junb, Jun, Fos, Egr1, Atf3 
-
-Cluster 6 = S100g
-
-Cluster 7 = Cxcl10 
-
-Cluster 3 = could be Leng9 but i feel thats so insignificant. 
-
-Cluster 1 = No idea.
-Missing genes for 1 and 3 
-
-# Subsetting contaminate
+# Subsetting
 ```{r}
 
 SO7 <- subset(SO5_new, idents = "8", invert = TRUE)
@@ -389,6 +372,7 @@ DotPlot(SO7,
 features = markers.to.plot1,
 dot.scale = 8,
 dot.min = 0,
+scale = FALSE,   
 scale.max = 100,
 scale.min = 0,
 col.min = -2.5,
@@ -407,6 +391,25 @@ VlnPlot(SO7, features = "Jun")
 
 
 ```
+
+
+
+Cluster 0 = Aard, Mcub, also most in Pappa2 
+
+Cluster 1 = Unknown but Leng9 according to VlnPlot
+
+Cluster 2 = Cldn19, Krt7, Egf, Fabp3, Foxq1, Cxcl12
+
+Cluster 3 = Pappa2 , Leng9 , Vegfa?
+
+Cluster 4 = Ptger3, but VlnPlot makes me question.
+
+Cluster 5 = Junb, Jun, Fos, Egr1, Atf3 
+
+Cluster 6 = S100g
+
+Cluster 7 = Cxcl10 
+
 My assumptions have changed now that I have viewed violin plots. 
 
 
@@ -422,12 +425,14 @@ Both 1 and 3 have Leng9 which is something thats expressed during evolutionary s
 According to the Multidimensional dotplot 0 and 1 also look pretty identical minus the expression of a few specific genes but that may jsut be the product of change. 
 
 Not sure how to explain 4 and 3 though.
+
 # Analyzing 
+
 ``` {r}
+
 
 DimPlot(SO7,split.by = "treatment")
 DimPlot(SO7,split.by = "sample")
-
 
 
 ```
@@ -438,3 +443,192 @@ SO2 and SO3 = low_salt
 Im guessing, the two Control samples were slightly different. One expressing more in each. They then used induced low salt into each of these two controls types and got SO2 and SO3 but they're different because of control.
 
 I think it might be a good idea to analyze maybe just SO1 and SO2 to see the change of 4 turning into 3 and analyzing SO4 and SO3 separate to see cluster 1 changing to 0.
+
+Okay after reading the research paper i think Im entirely wrong. 
+
+```{r}
+
+markers.to.plot2 <- c(
+  # Cluster 0
+  "Aard",
+  "Mcub",
+  "Pappa2",
+
+  # Cluster 1
+  "Leng9",
+
+  # Cluster 2
+  "Cldn19",
+  "Krt7",
+  "Egf",
+  "Fabp3",
+  "Foxq1",
+  "Cxcl12",
+  "Ckb",
+
+  # Cluster 3
+  "Vegfa",
+
+  # Cluster 4
+  "Ptger3",
+
+  # Cluster 5
+  "Junb",
+  "Jun",
+  "Fos",
+  "Egr1",
+  "Atf3",
+  "Ccn1",
+
+  # Cluster 6
+  "S100g",
+
+  # Cluster 7
+  "Cxcl10"
+)
+
+DotPlot(
+  SO7,
+  features = markers.to.plot2,
+  dot.scale = 8,
+  dot.min = 0,
+  scale = FALSE,        
+  scale.max = 100,
+  scale.min = 0,
+  col.min = -2.5,
+  col.max = 2.5
+) + coord_flip()
+
+```
+Cluster 7 = Cxcl10 Type 1
+Cluster 6 = S100g Type 2
+Cluster 5 = Fos Type 3
+Cluster 2 = Egf Type 4
+Cluster 0,1,3,4 = same Type 5
+```{r}
+
+SO8 <- FindNeighbors(SO7, dims = 1:30, verbose = F)
+SO8 <- FindClusters(SO7, resolution = 0.45)
+DimPlot(SO8)
+
+SO8 <- subset(SO8, idents = c("0", "1", "3", "4"))
+
+
+SO8 <- FindNeighbors(SO8, dims = 1:30, verbose = F)
+SO8 <- FindClusters(SO8, resolution = 1.2)
+DimPlot(SO8)
+
+SO8_m <- FindAllMarkers(SO8, only.pos = TRUE)
+SO8_m %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+SO8_m %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 5) %>%
+    ungroup() -> top10_
+DoHeatmap(SO8, features = top10_$gene) + NoLegend()
+DimPlot(SO8)
+
+DotPlot(SO8,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,   
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+VlnPlot(SO8,"Ptger3")
+VlnPlot(SO8,"Ckb")
+VlnPlot(SO8,"Aard")
+VlnPlot(SO8,"Mcub")
+VlnPlot(SO8,"Pappa2")
+VlnPlot(SO8,"Leng9")
+
+```
+
+NEXT STEP :
+
+Combine clusters 0, 1, 3, 4
+
+Gyarmati version
+
+my Version
+
+Cluster 7 = Cxcl10 Type 1
+
+Cluster 6 = S100g Type 2
+
+Cluster 5 = Fos Type 3
+
+Cluster 2 = Egf Type 4
+
+Cluster 0,1,3,4 = same Type 5
+
+
+```{r}
+#SO7 Dimplot
+
+SO_7 <- SO7
+
+SO_7@meta.data <- SO_7@meta.data %>% 
+  mutate(subclass_MD = dplyr::case_when(
+    seurat_clusters == 0  ~ "type_1",
+    seurat_clusters == 1  ~ "type_1",
+    seurat_clusters == 2  ~ "type_2",
+    seurat_clusters == 3  ~ "type_1",
+    seurat_clusters == 4  ~ "type_1",
+    seurat_clusters == 5  ~ "type_3",
+    seurat_clusters == 6  ~ "type_4",
+    seurat_clusters == 7  ~ "type_5"
+  ))
+
+SO7@meta.data$subclass_MD <- factor(SO_7@meta.data$subclass_MD , levels = c("type_1", "type_2", "type_3", "type_4", "type_5"))
+
+Idents(SO_7) <- SO_7@meta.data$subclass_MD
+
+DimPlot(object = SO_7, reduction = "umap", group.by = "subclass_MD", label = TRUE)
+
+
+DimPlot(object = SO_7, reduction = "umap", label = TRUE)
+
+
+markers.to.plot_MD <- c(
+  # type_1
+  # type_2
+  "Egf",
+  "Fabp3",
+  "Ktr7",
+
+  # type_3
+  "Fos",
+  "Egr1",
+  "Atf3",
+
+  # type_4
+  "S100g",
+
+  # type_5
+  "Cxcl10"
+)
+
+DotPlot(SO_7,
+features = markers.to.plot_MD,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+DimPlot(SO_7, split.by = "treatment")
+
+saveRDS(SO_7, file = "SO_7_recent.RDS")
+
+```
