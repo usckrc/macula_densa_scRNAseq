@@ -2,9 +2,78 @@
 title: "SO_7"
 author: "jeff karnsomprot"
 date: "2025-05-08"
-output: html_document
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: journal
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
 ---
 # LOADING DATASETS 
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!requireNamespace('BiocManager', quietly = TRUE)) {install.packages('BiocManager'); require("BiocManager")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("sctransform")) {install.packages("sctransform"); require("sctransform")}
+if (!require("glmGamPoi")) {BiocManager::install('glmGamPoi'); require("glmGamPoi")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("EnhancedVolcano")) {BiocManager::install('EnhancedVolcano'); require("EnhancedVolcano")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("gghighlight")) {install.packages("gghighlight"); require("gghighlight")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("gplots")) {install.packages("gplots"); require("gplots")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+
+
+# Remove corrupted installation
+remove.packages(c("RSQLite", "org.Mm.eg.db", "clusterProfiler"))
+
+# Install from scratch
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("RSQLite")  # Core dependency
+BiocManager::install("org.Mm.eg.db")
+BiocManager::install("clusterProfiler")
+
+
+# CRAN packages
+install.packages(c("dplyr", "magrittr"))
+library(org.Mm.eg.db)
+library(clusterProfiler)
+library(AnnotationDbi)
+library(dplyr)
+library(magrittr)
+
+
+
+
+library("EnhancedVolcano")
+library(UpSetR)
+
+```
+
 ```{r setup, include=FALSE}
 options(future.globals.maxSize = 74 * 1024^3) # 55 GB
 getOption("future.globals.maxSize") #59055800320
@@ -14,6 +83,7 @@ SO7 <- LoadSeuratRds(here("jk_code", "SO_7_recent.rds"))
 SO7@meta.data$subclass <- NULL
 ```
 # SIMPLIFYING DATA SET
+
 ```{r}
 
 DimPlot(object = SO7, reduction = "umap", group.by = "subclass_MD", label = TRUE)
@@ -21,7 +91,8 @@ DimPlot(object = SO7, reduction = "umap", group.by = "subclass_MD", label = TRUE
 
 markers.to.plot_MD <- c(
   # type_1
-  # not sure what gene to put
+  "Pappa2",
+  "Aard",
   # type_2
   "Egf",
   "Fabp3",
@@ -41,6 +112,7 @@ markers.to.plot_MD <- c(
 
 DotPlot(SO7,
 features = markers.to.plot_MD,
+group.by = "subclass_MD",
 dot.scale = 8,
 dot.min = 0,
 scale = FALSE,
@@ -53,22 +125,47 @@ coord_flip()
 DimPlot(SO7, split.by = "treatment")
 
 
+markers.to.plot_MD2 <- c(
+  
+  # type_1
+  "Pappa2",
+ 
+  # type_2
+  "Egf",
 
+  # type_3
+  "Fos",
+
+  # type_4
+  "S100g",
+
+  # type_5
+  "Cxcl10"
+)
+
+DotPlot(SO7,
+features = markers.to.plot_MD2,
+group.by = "subclass_MD",
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
 ```
-
+# Viewing Each Cluster with its DEGs
 ```{r}
-
-df <- FindMarkers(SO_E7, ident.1 = "4M_Alp", ident.2 = "WT", group.by = "", subset.ident = "EC_glom", logfc.threshold = 0.25, min.pct = 0.25)
-SO7@meta.data$subclass <- NULL
+Idents(SO7) <- "subclass_MD"
 
 df <- FindMarkers(
-  SO7,
+  object = SO7,
   ident.1 = "type_1",
-  ident.2 = "",
-  group.by = "treatment",
-  subset.ident = "CellTypeX",
+  ident.2 = NULL,
   logfc.threshold = 0.25,
   min.pct = 0.25
+)
   
   all_markers <- FindAllMarkers(
   SO7,
@@ -107,6 +204,7 @@ df <- FindMarkers(
   
 ```
 
+# Violin plots to show further information
 ```{r}
 
 # Violin plots for top marker genes of each type cluster
@@ -126,7 +224,7 @@ VlnPlot(SO7, features = c("S100g"))
 VlnPlot(SO7, features = c("Cxcl10"))
 
 ```
-
+# Difference between low_salt vs control
 ```{r}
 
 # Split your object by the "treatment" column
@@ -148,7 +246,7 @@ markers_type1 <- FindMarkers(
   group.by = "treatment",
   logfc.threshold = 0.25,
   min.pct = 0.25
-  
+)
   
 df<- markers_type1 %>% arrange(desc(avg_log2FC))
 
@@ -161,12 +259,14 @@ VlnPlot(SO7, features = test, group.by = "treatment")
 test2 <- tail(rownames(df), n = 3)
 
 VlnPlot(SO7, features = test2, group.by = "treatment")
+
 VlnPlot(SO7, features = c("Ckb", "Egfl6", "Ide"), group.by = "treatment")
 
 
 
 ```
 
+# Volcano Plot
 
 ```{r}
 df2 <- df %>% filter(p_val_adj < 0.05)
@@ -200,3 +300,224 @@ EnhancedVolcano(df2,
         axis.line = element_line(size = 1.2),  # Increases axis border thickness
         legend.position = "none")
 ```
+# Downregulated Pathways of DEG's
+
+```{r}
+DEG_list <- df2
+
+markers <- DEG_list %>% rownames_to_column(var="SYMBOL")
+
+head(markers, n = 50)
+
+ENTREZ_list <- bitr(
+  geneID = rownames(DEG_list),
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+
+markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
+
+# Removing genes that are not statistically significant. 
+markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers <-  markers %>% dplyr::filter(avg_log2FC < 0) %>%  arrange(desc(abs(avg_log2FC)))
+#head(pos.markers, n = 50)
+
+pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go
+
+dotplot(pos_go) +
+    ggtitle("") +
+    theme(plot.title = element_text(hjust = 0.5)) + 
+    theme_classic() + 
+    scale_x_reverse()  # Reverses the x-axis
+
+```
+
+# Upregulated Pathway of DEG's
+```{r}
+DEG_list <- df2
+
+markers <- DEG_list %>% rownames_to_column(var="SYMBOL")
+
+head(markers, n = 50)
+
+ENTREZ_list <- bitr(geneID = rownames(DEG_list),   #input gene id
+                    fromType = "SYMBOL",           #input id type
+                    toType = "ENTREZID",           #output id type
+                    OrgDb = "org.Mm.eg.db"         #annotation Db
+                    )
+
+markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
+
+# Removing genes that are not statistically significant. 
+markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 0) %>%  arrange(desc(abs(avg_log2FC)))
+#head(pos.markers, n = 50)
+
+pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go
+
+dotplot(pos_go) +
+    ggtitle("") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 lines
+
+```
+
+# Analysis Mine vs Article
+
+```{r}
+
+
+# Combine all genes into a single vector
+genes_to_plot <- c("Fabp3", "Egf", "Ccn1", "Foxq1", "Cxcl12",
+                   "Vash2", "Pamr1", "Vegfa", "Ccn3",
+                   "Bmp3", "Fgf9", "Spp1", "Wnt10a", "Sfrp1", "Tcf4")
+
+# Generate FeaturePlots for all genes
+FeaturePlot(SO7, features = genes_to_plot, 
+            reduction = "umap", 
+            pt.size = 0.5, 
+            ncol = 4)
+
+
+# Define gene groups
+group1 <- c("Aard", "Dctd", "Pappa2")           # Type 1 
+group2 <- c("Foxq1", "Glod5")                   # Type 2
+group3 <- c("Fosb", "Egr1", "Atf3")             # Type 3
+group4 <- c("S100g")                            # Type 4
+group5 <- c("Cxcl10")                           # Type 5
+
+# Create Feature plots for each group
+plot1 <- FeaturePlot(SO7, features = group1, pt.size = 0) + ggtitle("Type 1 Markers")
+plot2 <- FeaturePlot(SO7, features = group2, pt.size = 0) + ggtitle("Type 2 Markers")
+plot3 <- FeaturePlot(SO7, features = group3, pt.size = 0) + ggtitle("Type 3 Markers")
+plot4 <- FeaturePlot(SO7, features = group4, pt.size = 0) + ggtitle("Type 4 Marker")
+plot5 <- FeaturePlot(SO7, features = group5, pt.size = 0) + ggtitle("Type 5 Marker")
+
+# Combine all plots into a single layout
+combined_plot <- (plot1 | plot2) / (plot3 | plot4 | plot5)
+
+# Display the combined plot
+print(combined_plot)
+
+
+# Create Feature plots for each group
+plot1v <- VlnPlot(SO7, features = group1, pt.size = 0) + ggtitle("Type 1 Markers")
+plot2v <- VlnPlot(SO7, features = group2, pt.size = 0) + ggtitle("Type 2 Markers")
+plot3v <- VlnPlot(SO7, features = group3, pt.size = 0) + ggtitle("Type 3 Markers")
+plot4v <- VlnPlot(SO7, features = group4, pt.size = 0) + ggtitle("Type 4 Marker")
+plot5v <- VlnPlot(SO7, features = group5, pt.size = 0) + ggtitle("Type 5 Marker")
+
+# Combine all plots into a single layout
+combined_plotv <- (plot1v | plot2v)
+combined_plotv2 <- (plot3v | plot4v | plot5v)
+
+# Display the combined plot
+print(combined_plotv)
+print(combined_plotv2)
+print(plot1v)
+print(plot5)
+
+
+
+
+```
+
+# Pathway Analysis of Each Cluster
+
+```{r}
+
+# Load required libraries
+library(clusterProfiler)
+library(org.Mm.eg.db)
+library(dplyr)
+library(tibble)
+library(ggplot2)
+library(stringr)
+
+# Loop through types 1 to 5
+for (i in 1:5) {
+  cat("\n\n## Type", i, "Pathways\n\n")
+  
+  # Dynamically get the marker object
+  marker_obj_name <- paste0("type", i, "_markers")
+  DEG_list <- get(marker_obj_name)
+  
+  # Prepare marker table
+  markers <- DEG_list %>%
+    rownames_to_column(var = "SYMBOL")
+  
+  # Convert SYMBOL to ENTREZID
+  ENTREZ_list <- bitr(
+    geneID = markers$SYMBOL,
+    fromType = "SYMBOL",
+    toType = "ENTREZID",
+    OrgDb = org.Mm.eg.db
+  )
+  
+  # Merge and filter
+  markers <- ENTREZ_list %>%
+    inner_join(markers, by = "SYMBOL") %>%
+    filter(p_val_adj < 0.05)
+  
+  # Select upregulated genes
+  pos.markers <- markers %>%
+    filter(avg_log2FC > 0) %>%
+    arrange(desc(avg_log2FC))
+  
+  pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
+  
+  # Run enrichment if there are genes
+  if (length(pos.ranks) > 0) {
+    pos_go <- enrichGO(
+      gene = pos.ranks,
+      OrgDb = org.Mm.eg.db,
+      ont = "BP",
+      readable = TRUE
+    )
+    
+    # Plot
+    print(
+      dotplot(pos_go) +
+        ggtitle(paste("Type", i, "Upregulated Pathways")) +
+        theme_classic() +
+        theme(
+          plot.title = element_text(hjust = 0.5),
+          legend.position = "left",
+          axis.text.y = element_text(size = 10)
+        ) +
+        scale_y_discrete(labels = function(x) str_wrap(x, width = 40))
+    )
+  } else {
+    cat("No significant upregulated genes for Type", i, "\n\n")
+  }
+}
+
+```
+
