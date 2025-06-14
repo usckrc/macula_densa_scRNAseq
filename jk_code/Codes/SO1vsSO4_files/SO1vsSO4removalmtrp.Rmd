@@ -1,0 +1,316 @@
+---
+title: "SO1vsSO4_remove"
+author: "jeff karnsomprot"
+date: "2025-06-11"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: journal
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+# Load packages
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!requireNamespace('BiocManager', quietly = TRUE)) {install.packages('BiocManager'); require("BiocManager")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("sctransform")) {install.packages("sctransform"); require("sctransform")}
+if (!require("glmGamPoi")) {BiocManager::install('glmGamPoi'); require("glmGamPoi")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("EnhancedVolcano")) {BiocManager::install('EnhancedVolcano'); require("EnhancedVolcano")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("gghighlight")) {install.packages("gghighlight"); require("gghighlight")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("gplots")) {install.packages("gplots"); require("gplots")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+
+
+# Remove corrupted installation
+remove.packages(c("RSQLite", "org.Mm.eg.db", "clusterProfiler"))
+
+# Install from scratch
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("RSQLite")  # Core dependency
+BiocManager::install("org.Mm.eg.db")
+BiocManager::install("clusterProfiler")
+
+
+# CRAN packages
+install.packages(c("dplyr", "magrittr"))
+library(org.Mm.eg.db)
+library(clusterProfiler)
+library(AnnotationDbi)
+library(dplyr)
+library(magrittr)
+
+
+
+
+library("EnhancedVolcano")
+library(UpSetR)
+
+```
+
+
+```{r}
+
+load(here("jk_code", "SO4analysis.rds"))
+
+Idents(SO4) <- "sample"
+
+SO1 <- subset(SO4, idents = c("SO1", "SO4"))
+
+rm(SO4)
+
+
+
+```
+
+```{r}
+
+SO1 <- SCTransform(SO1) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:30) %>%
+    FindClusters() %>%
+    RunUMAP(dims = 1:30)
+
+DimPlot(SO1)
+DimPlot(SO1,split.by = "sample")
+
+Idents(SO1) <- "sample"
+SO1.markers <- FindAllMarkers(SO1, only.pos = TRUE)
+SO1.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+SO1.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 10) %>%
+    ungroup() -> top10
+DoHeatmap(SO1, features = top10$gene) + NoLegend()
+```
+
+
+```{r}
+
+SO1.markers <- SO1.markers[!grepl("^mt-|^Rp", rownames(SO1.markers)), ]
+
+SO1.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 10) %>%
+    ungroup() -> top10
+DoHeatmap(SO1, features = top10$gene) + NoLegend()
+
+markerstoplot <- c("Hspa8", "Ptger3", "Gxp4","Ckb","Atp4a","S100g","")
+
+DotPlot(SO1,
+features = markerstoplot,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+SO1_markers <- SO1.markers[SO1.markers$cluster == "SO1", ]
+SO4_markers <- SO1.markers[SO1.markers$cluster == "SO4", ]
+
+
+
+```
+
+# View pathway analysis for the genes
+
+## SO1, Control sample 1
+```{r}
+
+
+df<- SO1_markers %>% arrange(desc(avg_log2FC))
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+DEG_list <- df2
+
+markers <- DEG_list %>% rownames_to_column(var="SYMBOL")
+
+head(markers, n = 50)
+
+ENTREZ_list <- bitr(
+  geneID = rownames(DEG_list),
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+
+markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
+
+# Removing genes that are not statistically significant. 
+markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 0) %>%  arrange(desc(abs(avg_log2FC)))
+#head(pos.markers, n = 50)
+
+pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go
+
+ dotplot(pos_go) +
+    ggtitle("") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 lines
+```
+
+
+## SO4 Control Sample 2 
+```{r}
+
+df<- SO4_markers %>% arrange(desc(avg_log2FC))
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+DEG_list <- df2
+
+markers <- DEG_list %>% rownames_to_column(var="SYMBOL")
+
+head(markers, n = 50)
+
+ENTREZ_list <- bitr(
+  geneID = rownames(DEG_list),
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+
+markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
+
+# Removing genes that are not statistically significant. 
+markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 0) %>%  arrange(desc(abs(avg_log2FC)))
+#head(pos.markers, n = 50)
+
+pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go
+
+ dotplot(pos_go) +
+    ggtitle("") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 lines
+```
+
+
+# Seeing if these differences are true
+
+
+```{r}
+
+
+mitochondrial_transport <- c("Slc30a2", "Dynlt1c", "Dynlt1a", "Pdcd5-ps", "Mpc1", "Tomm7",
+                     "Ucp2", "Flvcr1", "Gsk3b", "Romo1", "Bnip3", "Bcl2",
+                     "Mpc2", "Ier3", "Mdh1")
+
+metal_ion_transport <- c("Per1", "F2r", "Usp2", "Prkd1", "Vdr", "Scn4b", 
+                     "Tmbim6", "Sumo1", "Hbp1", "Cacna1d", "Ucp2", 
+                     "Nipsnap2", "Itgb1", "Klhl24", "Fkbp1a", "Bcl2", 
+                     "Wnk1", "Ywhae", "Arf1", "Kcnj1", "Atp1b1")
+
+RNA_splicing <- c("Hspa8", "Nol3", "Celf2", "Tsen34", "U2af1", "Umod",
+                     "Srsf3", "Polr2a", "Gemin7", "Srsf6", "Srsf7", "Zc3h13",
+                     "Ncbp1", "Ybx1", "Mfap1a", "Zfp326", "Prpf8", "Phf5a")
+
+
+DotPlot(SO1,
+features = mitochondrial_transport,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+DotPlot(SO1,
+features = metal_ion_transport,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+DotPlot(SO1,
+features = RNA_splicing,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+
+
+```
+
+
+Note : Everything seems to be the same or similar
