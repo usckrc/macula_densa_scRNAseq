@@ -117,6 +117,11 @@ FeaturePlot(SO2, "Cacnb4")
 VlnPlot(SO2, "Cacnb4")
 
 
+
+FeaturePlot(SO2, "Gcgr")
+VlnPlot(SO2, "Gcgr")
+
+
 SO
 SO2
 SO3
