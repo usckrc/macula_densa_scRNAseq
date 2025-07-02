@@ -1,5 +1,5 @@
 ---
-title: "SO1 vs SO4"
+title: "control vs SO4"
 author: "jeff karnsomprot"
 date: "2025-06-05"
 output:
@@ -48,9 +48,6 @@ if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
 if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
 
 
-# Remove corrupted installation
-remove.packages(c("RSQLite", "org.Mm.eg.db", "clusterProfiler"))
-
 # Install from scratch
 if (!require("BiocManager", quietly = TRUE))
     install.packages("BiocManager")
@@ -82,7 +79,7 @@ load(here("jk_code", "SO4analysis.rds"))
 
 ```
 
-# Isolating SO1 and SO4 samples
+# Isolating control and SO4 samples
 
 ```{r}
 
@@ -95,11 +92,12 @@ Idents(SO4) <- "sample"
 
 DimPlot(SO4,split.by = "sample")
 
-SO <- subset(SO4, idents = c("SO1","SO4"))
+control <- subset(SO4, idents = c("SO1","SO4"))
 
-DimPlot(SO)
+low_salt <- subset(SO4, idents = c("SO2","SO3"))
 
-rm(SO4)
+DimPlot(SO4)
+
 
 ```
 
@@ -107,48 +105,74 @@ rm(SO4)
 
 ```{r}
 
-
-SO1 <- SCTransform(SO) %>%
+control <- SCTransform(control) %>%
     RunPCA() %>%
     FindNeighbors(dims = 1:30) %>%
     FindClusters() %>%
     RunUMAP(dims = 1:30)
 
-DimPlot(SO1)
-DimPlot(SO1,split.by = "sample")
+DimPlot(control)
+DimPlot(control,split.by = "sample")
 
-Idents(SO1) <- "sample"
-SO1.markers <- FindAllMarkers(SO1, only.pos = TRUE)
-SO1.markers %>%
+Idents(control) <- "sample"
+control.markers <- FindAllMarkers(control, only.pos = TRUE)
+control.markers %>%
     group_by(cluster) %>%
     dplyr::filter(avg_log2FC > 1)
 
-SO1.markers %>%
+control.markers %>%
     group_by(cluster) %>%
     dplyr::filter(avg_log2FC > 1) %>%
     slice_head(n = 10) %>%
     ungroup() -> top10
-DoHeatmap(SO1, features = top10$gene) + NoLegend()
+DoHeatmap(control, features = top10$gene) + NoLegend()
 
 ```
 
+# Finding Markers that define each low salt  Sample
+
+```{r}
+
+low_salt <- SCTransform(low_salt) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:30) %>%
+    FindClusters() %>%
+    RunUMAP(dims = 1:30)
+
+DimPlot(low_salt)
+DimPlot(low_salt,split.by = "sample")
+
+Idents(low_salt) <- "sample"
+low_salt.markers <- FindAllMarkers(control, only.pos = TRUE)
+low_salt.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+low_salt.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 10) %>%
+    ungroup() -> top10
+DoHeatmap(low_salt, features = top10$gene) + NoLegend()
+
+```
 
 # Visualizing Difference
 
 ```{r}
 
 
-FeaturePlot(SO1,"Ptger3")
-FeaturePlot(SO1, "S100g")
+FeaturePlot(control,"Ptger3")
+FeaturePlot(control, "S100g")
 
-VlnPlot(SO1,"Hspa8")
-VlnPlot(SO1, "Ptger3")
-VlnPlot(SO1, "S100g")
+VlnPlot(control,"Hspa8")
+VlnPlot(control, "Ptger3")
+VlnPlot(control, "S100g")
 
 markers.to.plot1 <- c("Ptger3","Hspa8","S100g")
   
 
-DotPlot(SO1,
+DotPlot(control,
 features = markers.to.plot1,
 dot.scale = 8,
 dot.min = 0,
@@ -164,7 +188,7 @@ coord_flip()
 
 
 
-SO1 expresses highly in Ptger3, SO4 expresses high in S100g.
+control expresses highly in Ptger3, SO4 expresses high in S100g.
 
 S01 Also has a lot more Ribosomal gene influence. 
 
@@ -174,19 +198,19 @@ Why?
 
 ```{r}
 
-SO1_markers <- SO1.markers[SO1.markers$cluster == "SO1", ]
-SO4_markers <- SO1.markers[SO1.markers$cluster == "SO4", ]
+control_markers <- control.markers[control.markers$cluster == "control", ]
+SO4_markers <- control.markers[control.markers$cluster == "SO4", ]
 
 
 ```
 
 # View pathway analysis for the genes
 
-## SO1, Control sample 1
+## control, Control sample 1
 ```{r}
 
 
-df<- SO1_markers %>% arrange(desc(avg_log2FC))
+df<- control.markers %>% arrange(desc(avg_log2FC))
 
 df2 <- df %>% filter(p_val_adj < 0.05)
 
@@ -232,112 +256,4 @@ pos_go
         axis.text.y = element_text(hjust = 0, size = 10)) +
     scale_y_discrete(position = "right", 
                      labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 lines
-```
-
-I Think that SO1, has too much ribosomal influence so I will try to remove it here and see what the changes are.
-
-## SO4 Control Sample 2 
-```{r}
-
-df<- SO4_markers %>% arrange(desc(avg_log2FC))
-
-df2 <- df %>% filter(p_val_adj < 0.05)
-
-DEG_list <- df2
-
-markers <- DEG_list %>% rownames_to_column(var="SYMBOL")
-
-head(markers, n = 50)
-
-ENTREZ_list <- bitr(
-  geneID = rownames(DEG_list),
-  fromType = "SYMBOL",
-  toType = "ENTREZID",
-  OrgDb = org.Mm.eg.db
-)
-
-
-markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
-
-# Removing genes that are not statistically significant. 
-markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
-#head(markers, n = 50)
-
-pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 0) %>%  arrange(desc(abs(avg_log2FC)))
-#head(pos.markers, n = 50)
-
-pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
-#head(pos.ranks)
-
-pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
-                   OrgDb = "org.Mm.eg.db",    
-                   ont = "BP",
-                   readable = TRUE)              #whether mapping gene ID to gene Name
-
-pos_go
-
- dotplot(pos_go) +
-    ggtitle("") +
-    theme_classic() + 
-    theme(
-        plot.title = element_text(hjust = 0.5),
-        legend.position = "left",
-        axis.text.y = element_text(hjust = 0, size = 10)) +
-    scale_y_discrete(position = "right", 
-                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 lines
-```
-
-
-```{r}
-
-cytoplasmic <- c(
-  "Gm6133", "Rps6", "Rpl13", "Rpl18", "Eif2s3y", "Rpl17", "Rpsa", "Rps19",
-  "Rpl9", "Rpl10a", "Rpl24", "Rpl28", "Rpl18a", "Rpl21", "Rpl27a",
-  "Rps6-ps4", "Rpl12", "Rpl")
-
-ribonucleoprotein <- c(
-  "Rps6", "Eif2s3y", "Nol3", "Mrto4", "Bysl", "Rpsa", "Nop56", "Celf2",
-  "Rps19", "Rpl24", "Utp14b", "Fbl", "Zfp593", "Gemin7", "Mphosph10",
-  "Rps6-ps4", "Srsf6", "Fts" )
-
-translation <- c(
-  "Rpl38", "Rps28", "Rpl37a", "Rpl37", "Rpl41", "Rpl39",
-  "Rps29", "Rps21", "Rpl31", "Pabpc1", "Rps26", "Rpl22l1",
-  "Rpl6l", "Rpl23a", "Rpl36a", "Rpl34", "Rps27a"
-)
-
-
-DotPlot(SO1,
-features = cytoplasmic,
-dot.scale = 8,
-dot.min = 0,
-scale = FALSE,
-scale.max = 100,
-scale.min = 0,
-col.min = -2.5,
-col.max = 2.5)+
-coord_flip()
-
-DotPlot(SO1,
-features = ribonucleoprotein,
-dot.scale = 8,
-dot.min = 0,
-scale = FALSE,
-scale.max = 100,
-scale.min = 0,
-col.min = -2.5,
-col.max = 2.5)+
-coord_flip()
-
-DotPlot(SO1,
-features = translation,
-dot.scale = 8,
-dot.min = 0,
-scale = FALSE,
-scale.max = 100,
-scale.min = 0,
-col.min = -2.5,
-col.max = 2.5)+
-coord_flip()
-
 ```

@@ -315,58 +315,6 @@ pos_go
 
 # Type 4
 
-```{r}
-
-  df<- type_4_markers %>% arrange(desc(avg_log2FC))
-
-
-df2 <- df %>% filter(p_val_adj < 0.05)
-
-DEG_list <- df2
-
-markers <- DEG_list %>% 
-  rownames_to_column(var = "SYMBOL")
-
-
-ENTREZ_list <- bitr(
-  geneID = rownames(DEG_list),
-  fromType = "SYMBOL",
-  toType = "ENTREZID",
-  OrgDb = org.Mm.eg.db
-)
-
-
-markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
-
-# Removing genes that are not statistically significant. 
-markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
-#head(markers, n = 50)
-
-pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 0) %>%  arrange(desc(abs(avg_log2FC))) %>% 
-  arrange(p_val_adj) %>% head(50)
-#head(pos.markers, n = 50)
-
-pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
-#head(pos.ranks)
-
-pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
-                   OrgDb = "org.Mm.eg.db",    
-                   ont = "BP",
-                   readable = TRUE)              #whether mapping gene ID to gene Name
-
-pos_go
-
- dotplot(pos_go) +
-    ggtitle("") +
-    theme_classic() + 
-    theme(
-        plot.title = element_text(hjust = 0.5),
-        legend.position = "left",
-        axis.text.y = element_text(hjust = 0, size = 10)) +
-    scale_y_discrete(position = "right", 
-                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 li
- 
-```
 
 ```{r}
 gene_list <- c("Ptgs2", "Nos1", "Mcub", "Egf",
