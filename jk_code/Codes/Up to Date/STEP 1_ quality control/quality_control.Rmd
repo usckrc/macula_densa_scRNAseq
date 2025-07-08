@@ -147,6 +147,21 @@ SO2 <- SCTransform(SO2) %>%
 
 DimPlot(SO2)
 
+SO2 <- subset(SO2, features = grep("^mt-|^Rp|^Gm", rownames(SO2), invert = TRUE, value = TRUE))
+
+SO.markers2 <- FindAllMarkers(SO2, only.pos = TRUE)
+SO.markers2 %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+SO.markers2 %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 5) %>%
+    ungroup() -> top10
+DoHeatmap(SO2, features = top10$gene) + NoLegend()
+
+
 DotPlot(SO2,
 features = markers.to.plot1,
 dot.scale = 8,
@@ -158,25 +173,36 @@ col.min = -2.5,
 col.max = 2.5)+
 coord_flip()
 
+
+
 ```
 
-# Subset and Recluster
+
+
+## Simplifying into a few types
 ```{r}
 
-SO3 <- subset(SO2, idents = c("13"), invert = TRUE)
+markers.to.plot2 <- c("Pappa2",
+                      "Ptger3",
+                      "Aard",
+                      "Ptgs2",
+                      "Egf",
+                      "Umod",
+                      "Cldn19",
+                      "Foxq1",
+                      "Sult1d1",
+                      "Fos",
+                      "Junb",
+                      "Hspb1",
+                      "Cxcl10",
+                      "Isg15",
+                      "Cryab"
+)
 
-DimPlot(SO3)
-ElbowPlot(SO3)
-SO3 <- SCTransform(SO3) %>%
-    RunPCA() %>%
-    FindNeighbors(dims = 1:10) %>%
-    FindClusters(resolution = 1) %>%
-    RunUMAP(dims = 1:30)
+DimPlot(SO2)
 
-DimPlot(SO3)
-
-DotPlot(SO3,
-features = markers.to.plot1,
+DotPlot(SO2,
+features = markers.to.plot2,
 dot.scale = 8,
 dot.min = 0,
 scale = FALSE,
@@ -185,63 +211,49 @@ scale.min = 0,
 col.min = -2.5,
 col.max = 2.5)+
 coord_flip()
-
-
-FeaturePlot(SO3,"Pappa2")
-FeaturePlot(SO3,"Nos1")
-FeaturePlot(SO3,"Slc12a1")
-
 ```
 
-
-## Repeat Subsetting and reclustering
 ```{r}
 
 
-SO4 <- subset(SO3, idents = c("13"), invert = TRUE)
-
-SO4 <- SCTransform(SO4) %>%
-    RunPCA() %>%
-    FindNeighbors(dims = 1:15) %>%
-    FindClusters(resolution = 1) %>%
-    RunUMAP(dims = 1:15)
-
-DimPlot(SO4)
-
-DotPlot(SO4,
-features = markers.to.plot1,
-dot.scale = 8,
-dot.min = 0,
-scale = FALSE,
-scale.max = 100,
-scale.min = 0,
-col.min = -2.5,
-col.max = 2.5)+
-coord_flip()
-
-FeaturePlot(SO4,"Pappa2")
-FeaturePlot(SO4,"Nos1")
-FeaturePlot(SO4,"Slc12a1")
+SO4 <- subset(SO2, idents = c("14"), invert = TRUE)
 
 
-SO4 <- SCTransform(SO4) %>%
-    RunPCA() %>%
-    FindNeighbors(dims = 1:15) %>%
-    FindClusters(resolution = 0.5) %>%
-    RunUMAP(dims = 1:15)
+SO4@meta.data <- SO4@meta.data %>%
+  mutate(subclass_MD = dplyr::case_when(
+    seurat_clusters %in% c(0,1,2,3,4,6,10) ~ "type_1",
+    seurat_clusters %in% c(5,7,12) ~ "type_2a",
+    seurat_clusters == 8 ~ "type_2b",
+    seurat_clusters == 9 ~ "type_3",
+    seurat_clusters == 11 ~ "type_4",
+    seurat_clusters == 13 ~ "type_2c",
+  ))
 
-SO.markers <- FindAllMarkers(SO4, only.pos = TRUE)
-SO.markers %>%
-    group_by(cluster) %>%
-    dplyr::filter(avg_log2FC > 1)
 
-SO.markers %>%
-    group_by(cluster) %>%
-    dplyr::filter(avg_log2FC > 1) %>%
-    slice_head(n = 10) %>%
-    ungroup() -> top10
-DoHeatmap(SO4, features = top10$gene) + NoLegend()
-DimPlot(SO4)
+SO4@meta.data$subclass_MD <- factor(
+  SO4@meta.data$subclass_MD, 
+  levels = c("type_1", "type_2a", "type_2b", "type_2c", "type_3","type_4")
+)
+
+
+SO4@meta.data <- SO4@meta.data %>%
+  mutate(subclass2_MD = dplyr::case_when(
+    seurat_clusters %in% c(0,1,2,3,4,6,10) ~ "type_1",
+    seurat_clusters %in% c(5,7,8,12,13) ~ "type_2",
+    seurat_clusters == 9 ~ "type_3",
+    seurat_clusters == 11 ~ "type_4"
+  ))
+
+SO4@meta.data$subclass2_MD <- factor(
+  SO4@meta.data$subclass2_MD, 
+  levels = c("type_1", "type_2","type_3","type_4")
+)
+
+Idents(SO4) <- SO4@meta.data$subclass_MD
+
+DimPlot(object = SO4, reduction = "umap", group.by = "subclass_MD", label = TRUE)
+DimPlot(object = SO4, reduction = "umap", group.by = "subclass2_MD", label = TRUE)
+DimPlot(SO4,group.by = "subclass_MD",split.by = "treatment")
 ```
 
 # Saving Seurat Object

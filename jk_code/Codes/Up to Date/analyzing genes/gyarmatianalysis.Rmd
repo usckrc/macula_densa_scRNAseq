@@ -1,0 +1,286 @@
+---
+title: "everycluster"
+author: "jeff karnsomprot"
+date: "2025-07-08"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: journal
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+# Loading in Data sets + Library packages.
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!requireNamespace('BiocManager', quietly = TRUE)) {install.packages('BiocManager'); require("BiocManager")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("sctransform")) {install.packages("sctransform"); require("sctransform")}
+if (!require("glmGamPoi")) {BiocManager::install('glmGamPoi'); require("glmGamPoi")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("EnhancedVolcano")) {BiocManager::install('EnhancedVolcano'); require("EnhancedVolcano")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("gghighlight")) {install.packages("gghighlight"); require("gghighlight")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("gplots")) {install.packages("gplots"); require("gplots")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+
+
+# Remove corrupted installation
+remove.packages(c("RSQLite", "org.Mm.eg.db", "clusterProfiler"))
+
+# Install from scratch
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("RSQLite")  # Core dependency
+BiocManager::install("org.Mm.eg.db")
+BiocManager::install("clusterProfiler")
+
+
+# CRAN packages
+install.packages(c("dplyr", "magrittr"))
+library(org.Mm.eg.db)
+library(clusterProfiler)
+library(AnnotationDbi)
+library(dplyr)
+library(magrittr)
+
+
+
+
+library("EnhancedVolcano")
+library(UpSetR)
+
+```
+
+
+```{r}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+
+```{r}
+
+load(here("jk_code", "SO4analysis.rds"))
+```
+
+# Average expression
+```{r}
+
+# avg expression in every cluster
+avg_exp <- AverageExpression(SO4)$RNA
+
+# Calculate row means (average across all clusters)
+gene_means <- rowMeans(avg_exp)
+
+# Order genes by mean expression, descending
+top_genes <- names(sort(gene_means, decreasing = TRUE))[1:50] # Top 50 genes
+
+
+
+```
+
+## Grabbing dataframe
+
+```{r}
+
+type_markers <- FindAllMarkers(SO4, only.pos = TRUE)
+type_markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+```
+
+```{r}
+
+
+# Filter for your top genes and arrang, replace top_genes with genes I may want to analyze specifically. 
+df <- type_markers %>%
+  filter(gene %in% top_genes) %>%
+  arrange(desc(avg_log2FC))
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+
+DEG_list <- df2
+
+markers <- DEG_list %>% mutate(SYMBOL = gene)
+
+
+ENTREZ_list <- bitr(
+  geneID = DEG_list$gene,
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+
+markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
+
+# Removing genes that are not statistically significant. 
+markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 0.5) %>%  arrange(desc(abs(avg_log2FC)))
+#head(pos.markers, n = 50)
+
+pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go
+
+ dotplot(pos_go) +
+    ggtitle("") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 lines
+```
+
+### Viewing genes of top 50
+
+```{R}
+
+pathway_type <- strsplit(pos_go$geneID, "/")
+
+names(pathway_type) <- pos_go$Description 
+
+pathway_type
+
+```
+
+
+```{r}
+
+gyarmati <- c("Fabp3", "Egf", "Ccn1", "Foxq1", "Cxcl12", "Vash2", "Pamr1", "Vegfa", "Ccn3", "Bmp3", "Fgf9", "Spp1", "Wnt10a", "Sfrp1", "Tcf4", "Pappa2", "Unc5d", "Sema3c", "Robo2", "Slit2", "Egfl6", "Hgfac", "Pdgfc", "Megf9", "Frem1", "Thsd4", "Spock2", "Mmp14", "Adamtsl2", "Car8", "Irx1", "Irx2", "Hoxd11", "Hoxc4", "Etv1")
+
+# Filter for your top genes and arrang, replace top_genes with genes I may want to analyze specifically. 
+df <- type_markers %>%
+  filter(gene %in% gyarmati) %>%
+  arrange(desc(avg_log2FC))
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+
+DEG_list <- df2
+
+markers <- DEG_list %>% mutate(SYMBOL = gene)
+
+
+ENTREZ_list <- bitr(
+  geneID = DEG_list$gene,
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+
+markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
+
+# Removing genes that are not statistically significant. 
+markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 0.5) %>%  arrange(desc(abs(avg_log2FC)))
+#head(pos.markers, n = 50)
+
+pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go
+
+ dotplot(pos_go) +
+    ggtitle("") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 lines
+```
+
+### Viewing gyarmati genes vvia pathway
+```{r}
+
+pathway_type <- strsplit(pos_go$geneID, "/")
+
+names(pathway_type) <- pos_go$Description 
+
+pathway_type
+
+```
+```{r}
+
+
+
+# Research -> top genes that appear in all cluster
+
+VlnPlot(SO4, features = c("Bmp3", "Fgf9", "Spp1", "Wnt10a", "Sfrp1", "Tcf4")) 
+
+# accurate
+
+
+# Research -> top enriched genes that show clustering according to Gyarmati
+VlnPlot(SO4, features = c("Fabp3", "Egf", "Ccn1", "Foxq1", "Cxcl12", "Vash2", "Pamr1", "Vegfa", "Nov"),group.by = "subclass2_MD", ncol = 3)
+VlnPlot(SO4, features = c("Fabp3", "Egf", "Ccn1", "Foxq1", "Cxcl12", "Vash2", "Pamr1", "Vegfa", "Nov"), ncol = 3)
+
+
+gene_group <- list(
+  Angiogenesis = c("Unc5d", "Vash2", "Cxcl14", "Sfrp1", "Pamr1", "Pappa2"),
+  Migration_Patterning = c("Sema3c", "Robo2", "Slit2", "Bmp3", "Egfl6", "Fgf9"),
+  Growth_Factors = c("Vegfd", "Hgfac", "Pdgfc", "Megf9", "Frem1", "Thsd4"),
+  ECM_Remodeling = c("Spock2", "Mmp14", "Adamtsl2", "Car8"),
+  Transcription_GrowthFactors = c("Irx1", "Irx2", "Wnt10a", "Hoxd11", "Hoxc4", "Etv1")
+)
+
+
+Angiogenesis_genes <- gene_group$Angiogenesis
+Migration_Patterning_genes <- gene_group$Migration_Patterning
+Growth_Factors_genes <- gene_group$Growth_Factors
+ECM_Remodeling_genes <- gene_group$ECM_Remodeling
+Transcription_GrowthFactors_genes <- gene_group$Transcription_GrowthFactors
+
+VlnPlot(SO4,features = Angiogenesis_genes)
+VlnPlot(SO4,features = Migration_Patterning_genes)
+VlnPlot(SO4,features = Growth_Factors_genes)
+VlnPlot(SO4,features = ECM_Remodeling_genes)
+VlnPlot(SO4,features = Transcription_GrowthFactors_genes)
+
+```

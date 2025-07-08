@@ -1,0 +1,167 @@
+---
+title: "upset_plot_wip"
+author: "jeff karnsomprot"
+date: "2025-07-08"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: journal
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+# Loading in Data sets + Library packages.
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!requireNamespace('BiocManager', quietly = TRUE)) {install.packages('BiocManager'); require("BiocManager")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("sctransform")) {install.packages("sctransform"); require("sctransform")}
+if (!require("glmGamPoi")) {BiocManager::install('glmGamPoi'); require("glmGamPoi")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("EnhancedVolcano")) {BiocManager::install('EnhancedVolcano'); require("EnhancedVolcano")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("gghighlight")) {install.packages("gghighlight"); require("gghighlight")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("gplots")) {install.packages("gplots"); require("gplots")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("UpSetR")) {install.packages("UpSetR"); require("UpSetR")}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("ComplexHeatmap")
+
+if (!require("ComplexUpset")) {install.packages("ComplexUpset"); require("ComplexUpset")}
+
+# Remove corrupted installation
+remove.packages(c("RSQLite", "org.Mm.eg.db", "clusterProfiler"))
+
+# Install from scratch
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("RSQLite")  # Core dependency
+BiocManager::install("org.Mm.eg.db")
+BiocManager::install("clusterProfiler")
+
+
+# CRAN packages
+install.packages(c("dplyr", "magrittr"))
+library(org.Mm.eg.db)
+library(clusterProfiler)
+library(AnnotationDbi)
+library(dplyr)
+library(magrittr)
+library(ComplexUpset)
+library(ComplexHeatmap)
+
+
+library("EnhancedVolcano")
+library(UpSetR)
+
+
+
+```
+
+
+```{r}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+
+```{r}
+
+load(here("jk_code", "SO4analysis.rds"))
+```
+
+
+
+```{r}
+# Collect DEGS
+df <- FindAllMarkers(SO4, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+df <- df[
+  !grepl("^(mt-|Rp|Gm)|Rik$", rownames(df)),
+  ,
+  drop = FALSE
+]
+
+```
+
+
+```{r}
+
+
+df %>% group_by(cluster) %>% top_n(n = 5, wt = avg_log2FC)
+
+top5 <- df %>% group_by(cluster) %>% top_n(5, avg_log2FC)
+
+DoHeatmap(SO4, features = top5$gene) + NoLegend()
+
+
+DotPlot(SO4,
+        features = top5$gene,
+        cols = c("#0099ff", "#dc143c"),
+        dot.scale = 8,
+           dot.min = 0,
+           scale.max = 100,
+           scale.min = 0,
+           col.min = -2.5,
+        scale = FALSE,
+           col.max = 2.5) + 
+ # scale_y_discrete(limits = c(Prol"MD", "TAL β", "TAL α")) + 
+  theme(axis.text.x = element_text(),
+        axis.title = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        legend.text = element_text(size = 9),
+        legend.title = element_text(size = 9)) + 
+  RotatedAxis() + 
+  ggtitle("Top 5 MD DEGs") 
+
+#  Split dataframe into lists
+clustered_genes <- split(df$gene, df$cluster)
+
+str(clustered_genes)
+
+# Create a Matrix
+list_to_matrix(clustered_genes)
+
+df2 <- list_to_matrix(clustered_genes)
+
+df2 <- df2[!grepl("Rik$", rownames(df2)), ]
+
+head(df2)
+
+m1 <-  make_comb_mat(clustered_genes)
+m1
+
+#Plot Upset
+
+UpSet(m1, set_order = c("type_1", "type_2a", "type_2b", "type_2c","type_3","type_4"), comb_order = order(comb_size(m1))) 
+
+
+
+
+```
+
+

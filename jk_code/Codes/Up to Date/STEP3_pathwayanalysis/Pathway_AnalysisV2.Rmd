@@ -104,14 +104,19 @@ type_markers <- type_markers[
   drop = FALSE
 ]
 
+```
+
+```{r}
 
 type_1_markers <- type_markers[type_markers$cluster == "type_1", ]
-type_2_markers <- type_markers[type_markers$cluster == "type_2", ]
+type_2a_markers <- type_markers[type_markers$cluster == "type_2a", ]
+type_2b_markers <- type_markers[type_markers$cluster == "type_2b", ]
+type_2c_markers <- type_markers[type_markers$cluster == "type_2c", ]
 type_3_markers <- type_markers[type_markers$cluster == "type_3", ]
 type_4_markers <- type_markers[type_markers$cluster == "type_4", ]
 
 
-AnnotationDbi::select(org.Mm.eg.db, keys = c("Ptgs2os", "Spink5", "Aard","Cxcl10"), keytype = "SYMBOL", columns = "GO")
+
 
 ```
 
@@ -182,11 +187,12 @@ VlnPlot(SO4, c("Pappa2","Ramp3","Itga4"))
 
 #filtered_genes <- markers[abs(markers$pct.1 - markers$pct.2) > 0.3, ]
 ```
-## Type 2
+
+## Type 2a
 
 ```{r}
 
-df<- type_2_markers %>% arrange(desc(avg_log2FC))
+df<- type_2a_markers %>% arrange(desc(avg_log2FC))
 
 
 df2 <- df %>% filter(p_val_adj < 0.05)
@@ -235,33 +241,162 @@ pos_go
                      labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 li
  
 ```
-### Type 2 Gene View
+
+### Type 2a Gene View
 
 ```{r}
 
-pathway_type2 <- strsplit(pos_go$geneID, "/")
+pathway_type2a <- strsplit(pos_go$geneID, "/")
 
-names(pathway_type2) <- pos_go$Description 
+names(pathway_type2a) <- pos_go$Description 
 
-pathway_type2
+pathway_type2a
 
-VlnPlot(SO4, features = c("Egf","Umod","Cldn19","Foxq1","Cxcl12"))
-
-# Viewing genes appearing the most, need to fix code because this doesnt show anything
-# frequency <- unlist(pathway_type2)
-#count <- table(frequency)
-#count <- sort(count, decreasing = TRUE)
-#head(count, 20)
-#top10 <- names(head(count, 10))
-#FeaturePlot(SO4,features = top10)
-
-
+VlnPlot(SO4, c("Bdkrb2","Ccnd1"))
 
 ```
 
-## Type 3
+
+### Type 2b
 
 ```{r}
+df<- type_2b_markers %>% arrange(desc(avg_log2FC))
+
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+
+DEG_list <- df2
+
+markers <- DEG_list %>% mutate(SYMBOL = gene)
+
+
+ENTREZ_list <- bitr(
+  geneID = DEG_list$gene,
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+
+markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
+
+# Removing genes that are not statistically significant. 
+markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 1) %>%  arrange(desc(abs(avg_log2FC))) %>% head(200)
+#head(pos.markers, n = 50)
+
+pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go
+
+ dotplot(pos_go) +
+    ggtitle("") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 li
+ 
+```
+### Type 2b Gene View
+
+```{r}
+
+pathway_type2b <- strsplit(pos_go$geneID, "/")
+
+names(pathway_type2b) <- pos_go$Description 
+
+pathway_type2b
+
+VlnPlot(SO4,c("Sulf2","Bmp4","Jag1","Foxq1","Irx3"))
+
+```
+
+
+### Type 2c
+
+```{r}
+df<- type_2c_markers %>% arrange(desc(avg_log2FC))
+
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+
+DEG_list <- df2
+
+markers <- DEG_list %>% mutate(SYMBOL = gene)
+
+
+ENTREZ_list <- bitr(
+  geneID = DEG_list$gene,
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+
+markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
+
+# Removing genes that are not statistically significant. 
+markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 1) %>%  arrange(desc(abs(avg_log2FC))) %>% head(200)
+#head(pos.markers, n = 50)
+
+pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go
+
+ dotplot(pos_go) +
+    ggtitle("") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 li
+ 
+```
+
+
+### Type 2c Gene View
+
+```{r}
+
+pathway_type2c <- strsplit(pos_go$geneID, "/")
+
+names(pathway_type2c) <- pos_go$Description 
+
+pathway_type2c
+
+VlnPlot(SO4, c("Aqp1","Calb1","Notch2"))
+
+```
+
+
+## Type 3 
+
+```{r}
+
 
 df<- type_3_markers %>% arrange(desc(avg_log2FC))
 
@@ -280,7 +415,6 @@ ENTREZ_list <- bitr(
   toType = "ENTREZID",
   OrgDb = org.Mm.eg.db
 )
-
 
 markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
 
@@ -309,8 +443,10 @@ pos_go
         legend.position = "left",
         axis.text.y = element_text(hjust = 0, size = 10)) +
     scale_y_discrete(position = "right", 
-                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 lin
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 li
 ```
+
+
 ### Viewing Type 3 Genes
 
 ```{r}
