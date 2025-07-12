@@ -1,5 +1,5 @@
 ---
-title: "Pathway_Analysis_subclass2MD"
+title: "Pathway_Analysis (4 Types)"
 author: "jeff karnsomprot"
 date: "2025-07-08"
 output:
@@ -130,7 +130,7 @@ df2 <- df %>% filter(p_val_adj < 0.05)
 
 DEG_list <- df2
 
-markers <- DEG_list %>% mutate(SYMBOL = gene)
+markers1 <- DEG_list %>% mutate(SYMBOL = gene)
 
 
 ENTREZ_list <- bitr(
@@ -141,27 +141,27 @@ ENTREZ_list <- bitr(
 )
 
 
-markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
+markers1 <-  ENTREZ_list %>% inner_join(markers1, by = "SYMBOL")
 
 # Removing genes that are not statistically significant. 
-markers <-  markers %>% dplyr::filter(p_val_adj < 0.005)
+markers1 <-  markers1 %>% dplyr::filter(p_val_adj < 0.05)
 #head(markers, n = 50)
 
-pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 0.6) %>%  arrange(desc(abs(avg_log2FC)))
+pos.markers1 <-  markers1 %>% dplyr::filter(avg_log2FC > 0.5) %>% arrange(desc(abs(avg_log2FC))) %>% head(200)
 #head(pos.markers, n = 50)
 
-pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
+pos.ranks1 <- pos.markers1$ENTREZID[abs(pos.markers1$avg_log2FC) > 0]
 #head(pos.ranks)
 
-pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
+pos_go1 <- enrichGO(gene = pos.ranks1,           #a vector of entrez gene id
                    OrgDb = "org.Mm.eg.db",    
                    ont = "BP",
                    readable = TRUE)              #whether mapping gene ID to gene Name
 
-pos_go
+pos_go1
 
- dotplot(pos_go) +
-    ggtitle("") +
+ chart1 <- dotplot(pos_go1) +
+    ggtitle("type 1") +
     theme_classic() + 
     theme(
         plot.title = element_text(hjust = 0.5),
@@ -172,12 +172,12 @@ pos_go
 ```
 
 
-### Viewing genes and pathway of type_1
+### Viewing genes Type 1
 
 ```{r}
-pathway_type1 <- strsplit(pos_go$geneID, "/")
+pathway_type1 <- strsplit(pos_go1$geneID, "/")
 
-names(pathway_type1) <- pos_go$Description 
+names(pathway_type1) <- pos_go1$Description 
 
 pathway_type1
 
@@ -198,7 +198,7 @@ df2 <- df %>% filter(p_val_adj < 0.05)
 
 DEG_list <- df2
 
-markers <- DEG_list %>% mutate(SYMBOL = gene)
+markers2 <- DEG_list %>% mutate(SYMBOL = gene)
 
 
 ENTREZ_list <- bitr(
@@ -209,27 +209,27 @@ ENTREZ_list <- bitr(
 )
 
 
-markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
+markers2 <-  ENTREZ_list %>% inner_join(markers2, by = "SYMBOL")
 
 # Removing genes that are not statistically significant. 
-markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
+markers2 <-  markers2 %>% dplyr::filter(p_val_adj < 0.05)
 #head(markers, n = 50)
 
-pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 1) %>%  arrange(desc(abs(avg_log2FC))) %>% head(200)
+pos.markers2 <-  markers2 %>% dplyr::filter(avg_log2FC > 1) %>%  arrange(desc(abs(avg_log2FC))) %>% head(200)
 #head(pos.markers, n = 50)
 
-pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
+pos.ranks2 <- pos.markers2$ENTREZID[abs(pos.markers2$avg_log2FC) > 0]
 #head(pos.ranks)
 
-pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
+pos_go2 <- enrichGO(gene = pos.ranks2,           #a vector of entrez gene id
                    OrgDb = "org.Mm.eg.db",    
                    ont = "BP",
                    readable = TRUE)              #whether mapping gene ID to gene Name
 
-pos_go
+pos_go2
 
- dotplot(pos_go) +
-    ggtitle("") +
+chart2 <- dotplot(pos_go2) +
+    ggtitle("type 2") +
     theme_classic() + 
     theme(
         plot.title = element_text(hjust = 0.5),
@@ -244,15 +244,14 @@ pos_go
 
 ```{r}
 
-pathway_type2 <- strsplit(pos_go$geneID, "/")
+pathway_type2 <- strsplit(pos_go2$geneID, "/")
 
-names(pathway_type2) <- pos_go$Description 
+names(pathway_type2) <- pos_go2$Description 
 
 pathway_type2
 
 VlnPlot(SO4, features = c("Egf","Umod","Cldn19","Foxq1","Cxcl12"))
 
-## Type 3
 
 
 ```
@@ -270,7 +269,7 @@ df2 <- df %>% filter(p_val_adj < 0.05)
 
 DEG_list <- df2
 
-markers <- DEG_list %>% mutate(SYMBOL = gene)
+markers3 <- DEG_list %>% mutate(SYMBOL = gene)
 
 
 ENTREZ_list <- bitr(
@@ -280,27 +279,27 @@ ENTREZ_list <- bitr(
   OrgDb = org.Mm.eg.db
 )
 
-markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
+markers3 <-  ENTREZ_list %>% inner_join(markers3, by = "SYMBOL")
 
 # Removing genes that are not statistically significant. 
-markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
+markers3 <-  markers3 %>% dplyr::filter(p_val_adj < 0.05)
 #head(markers, n = 50)
 
-pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 0) %>%  arrange(desc(abs(avg_log2FC)))
+pos.markers3 <-  markers3 %>% dplyr::filter(avg_log2FC > 0.5) %>%  arrange(desc(abs(avg_log2FC)))
 #head(pos.markers, n = 50)
 
-pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
+pos.ranks3 <- pos.markers3$ENTREZID[abs(pos.markers3$avg_log2FC) > 0]
 #head(pos.ranks)
 
-pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
+pos_go3 <- enrichGO(gene = pos.ranks3,           #a vector of entrez gene id
                    OrgDb = "org.Mm.eg.db",    
                    ont = "BP",
                    readable = TRUE)              #whether mapping gene ID to gene Name
 
-pos_go
+pos_go3
 
- dotplot(pos_go) +
-    ggtitle("") +
+ chart3 <- dotplot(pos_go3) +
+    ggtitle("type 3") +
     theme_classic() + 
     theme(
         plot.title = element_text(hjust = 0.5),
@@ -315,10 +314,9 @@ pos_go
 
 ```{r}
 
+pathway_type3 <- strsplit(pos_go3$geneID, "/")
 
-pathway_type3 <- strsplit(pos_go$geneID, "/")
-
-names(pathway_type3) <- pos_go$Description 
+names(pathway_type3) <- pos_go3$Description 
 
 pathway_type3
 
@@ -340,7 +338,7 @@ df2 <- df %>% filter(p_val_adj < 0.05)
 
 DEG_list <- df2
 
-markers <- DEG_list %>% mutate(SYMBOL = gene)
+markers4 <- DEG_list %>% mutate(SYMBOL = gene)
 
 
 ENTREZ_list <- bitr(
@@ -350,27 +348,27 @@ ENTREZ_list <- bitr(
   OrgDb = org.Mm.eg.db
 )
 
-markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
+markers4 <-  ENTREZ_list %>% inner_join(markers4, by = "SYMBOL")
 
 # Removing genes that are not statistically significant. 
-markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
+markers4 <-  markers4 %>% dplyr::filter(p_val_adj < 0.05)
 #head(markers, n = 50)
 
-pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 0) %>%  arrange(desc(abs(avg_log2FC)))
+pos.markers4 <-  markers4 %>% dplyr::filter(avg_log2FC > 0) %>%  arrange(desc(abs(avg_log2FC)))
 #head(pos.markers, n = 50)
 
-pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
+pos.ranks4 <- pos.markers4$ENTREZID[abs(pos.markers4$avg_log2FC) > 0]
 #head(pos.ranks)
 
-pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
+pos_go4 <- enrichGO(gene = pos.ranks4,           #a vector of entrez gene id
                    OrgDb = "org.Mm.eg.db",    
                    ont = "BP",
                    readable = TRUE)              #whether mapping gene ID to gene Name
 
-pos_go
+pos_go4
 
- dotplot(pos_go) +
-    ggtitle("") +
+ chart4 <- dotplot(pos_go4) +
+    ggtitle("type 4") +
     theme_classic() + 
     theme(
         plot.title = element_text(hjust = 0.5),
@@ -384,14 +382,25 @@ pos_go
 
 ```{r}
 
+pathway_type4 <- strsplit(pos_go4$geneID, "/")
 
-pathway_type4 <- strsplit(pos_go$geneID, "/")
-
-names(pathway_type4) <- pos_go$Description 
+names(pathway_type4) <- pos_go4$Description 
 
 pathway_type4
 
 VlnPlot(SO4, features = c("Cxcl10","Isg15","Ifit1"))
 
 ```
+
+
+# All 4 pathways next to eachother
+
+```{r}
+
+chart1+chart2
+
+chart3+chart4
+
+```
+
 

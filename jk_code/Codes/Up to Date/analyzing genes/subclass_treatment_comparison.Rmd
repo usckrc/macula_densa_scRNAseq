@@ -1,0 +1,699 @@
+---
+title: "low salt vs Control"
+author: "jeff karnsomprot"
+date: "2025-07-10"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: journal
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+# Loading in Data sets + Library packages.
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!requireNamespace('BiocManager', quietly = TRUE)) {install.packages('BiocManager'); require("BiocManager")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("sctransform")) {install.packages("sctransform"); require("sctransform")}
+if (!require("glmGamPoi")) {BiocManager::install('glmGamPoi'); require("glmGamPoi")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("EnhancedVolcano")) {BiocManager::install('EnhancedVolcano'); require("EnhancedVolcano")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("gghighlight")) {install.packages("gghighlight"); require("gghighlight")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("gplots")) {install.packages("gplots"); require("gplots")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+
+# Install from scratch
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("RSQLite")  # Core dependency
+BiocManager::install("org.Mm.eg.db")
+BiocManager::install("clusterProfiler")
+
+
+# CRAN packages
+install.packages(c("dplyr", "magrittr"))
+library(org.Mm.eg.db)
+library(clusterProfiler)
+library(AnnotationDbi)
+library(dplyr)
+library(magrittr)
+
+
+
+
+library("EnhancedVolcano")
+library(UpSetR)
+
+```
+
+
+# Loading Dataset
+
+```{r}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+
+```{r}
+
+load(here("jk_code", "SO4analysis.rds"))
+```
+
+
+```{r}
+
+SO4$sample <- factor(SO4$sample, levels = c("SO1", "SO4", "SO3", "SO2"))
+
+VlnPlot(SO4,"S100g",split.by = "treatment",group.by = "sample")
+
+# Macula Densa Markers , Nos1, Avpr1a, Slc12a1, Ptgs2, and Slc9a2
+
+VlnPlot(SO4, c("Nos1","Avpr1a","Slc12a1","Ptgs2","Slc9a2","Pappa2"),split.by = "treatment",group.by = "treatment")
+
+DimPlot(SO4)
+
+SO4 <- SO4[
+  !grepl("^(mt-|Rp|Gm)|Rik$", rownames(SO4)),
+  ,
+  drop = FALSE
+]
+
+DimPlot(SO4,group.by = "treatment",split.by = "treatment")
+
+#compare each type 1 control to type 1 low_treatment
+
+```
+
+# Markers of control vs low_salt up/down regulation
+ 
+ Upregulated = low salt, positive, activated by low_salt
+ Downregulated = control, negative, supressed of low_salt
+ 
+ 
+```{r}
+Idents(SO4) <- "subclass2_MD"
+subtypes <- c('type_1', 'type_2','type_3','type_4')
+markers_list <- list()
+
+# forloop markers for each subtype
+
+for (subtype in subtypes) {
+  markers_list[[subtype]] <- FindMarkers(
+    object = SO4,
+    ident.1 = "low_salt",
+    ident.2 = "control",
+    group.by = "treatment",
+    subset.ident = subtype,
+    min.pct = 0.1,
+    logfc.threshold = 0.25,
+    only.pos = FALSE
+  )
+}
+
+
+
+VlnPlot(SO4, features = "Pappa2", group.by = "treatment", split.by = "subclass_MD")
+
+
+DimPlot(SO4, reduction = "umap", split.by = "treatment", label = TRUE)
+
+table(SO4$subclass2_MD, SO4$treatment)
+
+
+```
+
+
+## Grabbing each markers of each type low salt vs control
+```{r}
+
+type_1 <- markers_list$type_1
+type_2<- markers_list$type_2
+type_3 <- markers_list$type_3
+type_4 <- markers_list$type_4
+
+```
+
+# Type 1
+
+## Type 1 Pathway Upregulated = Low salt 
+
+```{r}
+
+df<- type_1%>% arrange(desc(avg_log2FC))
+
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+
+DEG_list <- df2
+
+markers1up <- DEG_list %>% rownames_to_column(var="SYMBOL")
+
+
+ENTREZ_list <- bitr(
+  geneID = rownames(DEG_list),
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+markers1up <-  ENTREZ_list %>% inner_join(markers1up, by = "SYMBOL")
+
+markers1up <-  markers1up %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers1up <-  markers1up %>% dplyr::filter(avg_log2FC > 0.5) %>%  arrange(desc(abs(avg_log2FC)))
+#change around avg log value 
+
+pos.ranks1up <- pos.markers1up$ENTREZID[abs(pos.markers1 up$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go1up <- enrichGO(gene = pos.ranks1up,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go1up
+
+ chart1up <- dotplot(pos_go1up) +
+    ggtitle("type 1 upregulated lowsalt") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 lines
+ 
+
+chart1up
+```
+
+
+### Type 1 Up Gene View 
+
+```{r}
+pathway_type1up <- strsplit(pos_go1up$geneID, "/")
+
+names(pathway_type1up) <- pos_go1up$Description 
+
+pathway_type1up
+
+```
+
+## Type 1 Pathway Downregulated = Control ( absence of low salt) 
+
+```{r}
+
+# Arrange and filter DEGs
+
+df <- type_1 %>% arrange(desc(avg_log2FC))
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+DEG_list <- df2
+
+markers1down <- DEG_list %>% rownames_to_column(var="SYMBOL")
+
+ENTREZ_list <- bitr(
+  geneID = rownames(DEG_list),
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+markers1down <- ENTREZ_list %>% inner_join(markers1down, by = "SYMBOL")
+
+markers1down <- markers1down %>% dplyr::filter(p_val_adj < 0.05)
+
+pos.markers1down <- markers1down %>% dplyr::filter(avg_log2FC < 0) %>% arrange(desc(abs(avg_log2FC)))
+
+pos.ranks1down <- pos.markers1down$ENTREZID[abs(pos.markers1down$avg_log2FC) > 0.2]
+
+# GO enrichment for downregulated genes
+pos_go1down <- enrichGO(
+  gene = pos.ranks1down,
+  OrgDb = org.Mm.eg.db,
+  ont = "BP",
+  readable = TRUE
+)
+
+pos_go1down
+
+# Visualization
+chart1down <- dotplot(pos_go1down) +
+  ggtitle("type 1 downregulated control") +
+  theme_classic() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "left",
+    axis.text.y = element_text(hjust = 0, size = 10)
+  ) +
+  scale_y_discrete(
+    position = "right",
+    labels = function(x) str_wrap(x, width = 25)
+  )
+
+chart1down
+
+```
+
+### Type 1 Down Gene View 
+
+```{r}
+pathway_type1down <- strsplit(pos_go1down$geneID, "/")
+
+names(pathway_type1down) <- pos_go1down$Description 
+
+pathway_type1down
+
+```
+
+# Type 2 
+
+## Type 2 Pathway Upregulated = Low salt 
+
+```{r}
+
+df <- type_2 %>% arrange(desc(avg_log2FC))
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+DEG_list <- df2
+
+markers2up <- DEG_list %>% rownames_to_column(var="SYMBOL")
+
+ENTREZ_list <- bitr(
+  geneID = rownames(DEG_list),
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+markers2up <- ENTREZ_list %>% inner_join(markers2up, by = "SYMBOL")
+
+markers2up <- markers2up %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers2up, n = 50)
+
+pos.markers2up <- markers2up %>% dplyr::filter(avg_log2FC > 0) %>% arrange(desc(abs(avg_log2FC))) %>% head(200)
+#change around avg log value 
+
+pos.ranks2up <- pos.markers2up$ENTREZID[abs(pos.markers2up$avg_log2FC) > 0]
+#head(pos.ranks2up)
+
+pos_go2up <- enrichGO(gene = pos.ranks2up,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go2up
+
+chart2up <- dotplot(pos_go2up) +
+    ggtitle("type 2 upregulated lowsalt") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 lines
+
+chart2up
+
+```
+### Gene View 
+
+```{r}
+pathway_type2up <- strsplit(pos_go2up$geneID, "/")
+
+names(pathway_type2up) <- pos_go2up$Description 
+
+pathway_type2up
+
+```
+
+## Type 2 Pathway Downregulated = Control ( absence of low salt) 
+
+
+```{r}
+
+
+# Arrange and filter DEGs for type 2
+df <- type_2 %>% arrange(desc(avg_log2FC))
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+DEG_list <- df2
+
+markers2down <- DEG_list %>% rownames_to_column(var="SYMBOL")
+
+ENTREZ_list <- bitr(
+  geneID = rownames(DEG_list),
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+markers2down <- ENTREZ_list %>% inner_join(markers2down, by = "SYMBOL")
+
+markers2down <- markers2down %>% dplyr::filter(p_val_adj < 0.05)
+
+pos.markers2down <- markers2down %>% dplyr::filter(avg_log2FC < 0) %>% arrange(desc(abs(avg_log2FC)))
+
+pos.ranks2down <- pos.markers2down$ENTREZID[abs(pos.markers2down$avg_log2FC) > 0]
+
+# GO enrichment for downregulated genes
+pos_go2down <- enrichGO(
+  gene = pos.ranks2down,
+  OrgDb = org.Mm.eg.db,
+  ont = "BP",
+  readable = TRUE
+)
+
+pos_go2down
+
+# Visualization
+chart2down <- dotplot(pos_go2down) +
+  ggtitle("type 2 downregulated control") +
+  theme_classic() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "left",
+    axis.text.y = element_text(hjust = 0, size = 10)
+  ) +
+  scale_y_discrete(
+    position = "right",
+    labels = function(x) str_wrap(x, width = 25)
+  )
+
+chart2down
+
+```
+
+### Gene View 
+
+```{r}
+pathway_type2down <- strsplit(pos_go2down$geneID, "/")
+
+names(pathway_type2down) <- pos_go2down$Description 
+
+pathway_type2down
+
+
+```
+
+
+# Type 3 Upregulated -> lowsalt
+
+```{r}
+
+# Arrange and filter DEGs for type 3
+df <- type_3 %>% arrange(desc(avg_log2FC))
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+DEG_list <- df2
+
+markers3up <- DEG_list %>% rownames_to_column(var="SYMBOL")
+
+ENTREZ_list <- bitr(
+  geneID = rownames(DEG_list),
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+markers3up <- ENTREZ_list %>% inner_join(markers3up, by = "SYMBOL")
+
+markers3up <- markers3up %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers3up, n = 50)
+
+pos.markers3up <- markers3up %>% dplyr::filter(avg_log2FC > 0) %>% arrange(desc(abs(avg_log2FC)))
+#change around avg log value 
+
+pos.ranks3up <- pos.markers3up$ENTREZID[abs(pos.markers3up$avg_log2FC) > 0]
+#head(pos.ranks3up)
+
+pos_go3up <- enrichGO(
+  gene = pos.ranks3up,           # a vector of entrez gene id
+  OrgDb = org.Mm.eg.db,    
+  ont = "BP",
+  readable = TRUE                # whether mapping gene ID to gene Name
+)
+
+pos_go3up
+
+chart3up <- dotplot(pos_go3up) +
+  ggtitle("type 3 upregulated lowsalt") +
+  theme_classic() + 
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "left",
+    axis.text.y = element_text(hjust = 0, size = 10)
+  ) +
+  scale_y_discrete(
+    position = "right", 
+    labels = function(x) str_wrap(x, width = 25)
+  )  # Wrap y-axis labels to 2 lines
+
+chart3up
+
+```
+
+## Gene View Upregulated Type 3
+
+```{r}
+
+pathway_type3up <- strsplit(pos_go3up$geneID, "/")
+
+names(pathway_type3up) <- pos_go3up$Description 
+
+pathway_type3up
+
+```
+
+## Type 3 Downregulated Control asbence of low salt
+
+```{r}
+# Arrange and filter DEGs for type 3
+df <- type_3 %>% arrange(desc(avg_log2FC))
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+DEG_list <- df
+
+markers3down <- DEG_list %>% rownames_to_column(var="SYMBOL")
+
+ENTREZ_list <- bitr(
+  geneID = rownames(DEG_list),
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+markers3down <- ENTREZ_list %>% inner_join(markers3down, by = "SYMBOL")
+
+markers3down <- markers3down %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers3down, n = 50)
+
+pos.markers3down <- markers3down %>% dplyr::filter(avg_log2FC < 0) %>% arrange(desc(abs(avg_log2FC)))
+# You can adjust the log2FC threshold here if you want a stricter cutoff
+
+pos.ranks3down <- pos.markers3down$ENTREZID[abs(pos.markers3down$avg_log2FC) > 0]
+#head(pos.ranks3down)
+
+pos_go3down <- enrichGO(
+  gene = pos.ranks3down,           # a vector of entrez gene id
+  OrgDb = org.Mm.eg.db,    
+  ont = "BP",
+  readable = TRUE                  # whether mapping gene ID to gene Name
+)
+
+pos_go3down
+
+chart3down <- dotplot(pos_go3down) +
+  ggtitle("type 3 downregulated lowsalt") +
+  theme_classic() + 
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "left",
+    axis.text.y = element_text(hjust = 0, size = 10)
+  ) +
+  scale_y_discrete(
+    position = "right", 
+    labels = function(x) str_wrap(x, width = 25)
+  )  # Wrap y-axis labels to 2 lines
+
+chart3down
+
+```
+
+## Gene View Down regulated 
+
+```{r}
+
+
+pathway_type3down <- strsplit(pos_go3down$geneID, "/")
+
+names(pathway_type3down) <- pos_go3down$Description 
+
+pathway_type3down
+
+```
+
+# Type 4 
+
+## Type 4 Upregulated lowsalt 
+
+```{r}
+# Arrange and filter DEGs for type 4
+df <- type_4 %>% arrange(desc(avg_log2FC))
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+DEG_list <- df2
+
+markers4up <- DEG_list %>% rownames_to_column(var="SYMBOL")
+
+ENTREZ_list <- bitr(
+  geneID = rownames(DEG_list),
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+markers4up <- ENTREZ_list %>% inner_join(markers4up, by = "SYMBOL")
+
+markers4up <- markers4up %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers4up, n = 50)
+
+pos.markers4up <- markers4up %>% dplyr::filter(avg_log2FC > 0) %>% arrange(desc(abs(avg_log2FC)))
+# Adjust avg_log2FC threshold as needed
+
+pos.ranks4up <- pos.markers4up$ENTREZID[abs(pos.markers4up$avg_log2FC) > 0]
+#head(pos.ranks4up)
+
+pos_go4up <- enrichGO(
+  gene = pos.ranks4up,           # a vector of entrez gene id
+  OrgDb = org.Mm.eg.db,    
+  ont = "BP",
+  readable = TRUE                # whether mapping gene ID to gene Name
+)
+
+pos_go4up
+
+chart4up <- dotplot(pos_go4up) +
+  ggtitle("type 4 upregulated lowsalt") +
+  theme_classic() + 
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "left",
+    axis.text.y = element_text(hjust = 0, size = 10)
+  ) +
+  scale_y_discrete(
+    position = "right", 
+    labels = function(x) str_wrap(x, width = 25)
+  )  # Wrap y-axis labels to 2 lines
+
+chart4up
+
+```
+
+## Gene View Upregulated 
+
+```{r}
+
+
+pathway_type4up <- strsplit(pos_go4up$geneID, "/")
+
+names(pathway_type4up) <- pos_go4up$Description 
+
+pathway_type4up
+
+```
+
+## Type 4 Downregulated lowsalt 
+
+```{r}
+
+
+# Arrange and filter DEGs for type 4
+df <- type_4 %>% arrange(desc(avg_log2FC))
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+DEG_list <- df2
+
+markers4down <- DEG_list %>% rownames_to_column(var="SYMBOL")
+
+ENTREZ_list <- bitr(
+  geneID = rownames(DEG_list),
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+markers4down <- ENTREZ_list %>% inner_join(markers4down, by = "SYMBOL")
+
+markers4down <- markers4down %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers4down, n = 50)
+
+pos.markers4down <- markers4down %>% dplyr::filter(avg_log2FC < 0) %>% arrange(desc(abs(avg_log2FC)))
+# Adjust avg_log2FC threshold here if you want a stricter cutoff
+
+pos.ranks4down <- pos.markers4down$ENTREZID[abs(pos.markers4down$avg_log2FC) > 0]
+#head(pos.ranks4down)
+
+pos_go4down <- enrichGO(
+  gene = pos.ranks4down,           # a vector of entrez gene id
+  OrgDb = org.Mm.eg.db,    
+  ont = "BP",
+  readable = TRUE                  # whether mapping gene ID to gene Name
+)
+
+pos_go4down
+
+chart4down <- dotplot(pos_go4down) +
+  ggtitle("type 4 downregulated lowsalt") +
+  theme_classic() + 
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "left",
+    axis.text.y = element_text(hjust = 0, size = 10)
+  ) +
+  scale_y_discrete(
+    position = "right", 
+    labels = function(x) str_wrap(x, width = 25)
+  )  # Wrap y-axis labels to 2 lines
+
+chart4down
+
+```
+
+

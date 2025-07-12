@@ -149,18 +149,6 @@ DimPlot(SO2)
 
 SO2 <- subset(SO2, features = grep("^mt-|^Rp|^Gm", rownames(SO2), invert = TRUE, value = TRUE))
 
-SO.markers2 <- FindAllMarkers(SO2, only.pos = TRUE)
-SO.markers2 %>%
-    group_by(cluster) %>%
-    dplyr::filter(avg_log2FC > 1)
-
-SO.markers2 %>%
-    group_by(cluster) %>%
-    dplyr::filter(avg_log2FC > 1) %>%
-    slice_head(n = 5) %>%
-    ungroup() -> top10
-DoHeatmap(SO2, features = top10$gene) + NoLegend()
-
 
 DotPlot(SO2,
 features = markers.to.plot1,
@@ -179,8 +167,19 @@ coord_flip()
 
 
 
-## Simplifying into a few types
+# Simplifying Dataset with similarities
+
 ```{r}
+
+SO4 <- subset(SO2, idents = c("14"), invert = TRUE)
+
+SO4@meta.data$seurat_clusters <- factor(
+  SO4@meta.data$seurat_clusters,
+  levels = c("0", "1", "2", "3", "4", "6", "10", "9", "11", "12", "13", "5", "7", "8")
+)
+
+
+## Simplifying into a few types
 
 markers.to.plot2 <- c("Pappa2",
                       "Ptger3",
@@ -199,9 +198,9 @@ markers.to.plot2 <- c("Pappa2",
                       "Cryab"
 )
 
-DimPlot(SO2)
+DimPlot(SO4)
 
-DotPlot(SO2,
+DotPlot(SO4,
 features = markers.to.plot2,
 dot.scale = 8,
 dot.min = 0,
@@ -209,15 +208,19 @@ scale = FALSE,
 scale.max = 100,
 scale.min = 0,
 col.min = -2.5,
+group.by = "seurat_clusters",
 col.max = 2.5)+
 coord_flip()
+
+
+
+
 ```
 
+
+# Assigning Subclasses for clusters
+
 ```{r}
-
-
-SO4 <- subset(SO2, idents = c("14"), invert = TRUE)
-
 
 SO4@meta.data <- SO4@meta.data %>%
   mutate(subclass_MD = dplyr::case_when(
@@ -254,8 +257,53 @@ Idents(SO4) <- SO4@meta.data$subclass_MD
 DimPlot(object = SO4, reduction = "umap", group.by = "subclass_MD", label = TRUE)
 DimPlot(object = SO4, reduction = "umap", group.by = "subclass2_MD", label = TRUE)
 DimPlot(SO4,group.by = "subclass_MD",split.by = "treatment")
+
+
+
 ```
 
+# Viewing genes that differentiate each Type
+
+```{r}
+
+markers.to.plot3 <- c("Pappa2",
+                      "Egf",
+                      "Umod",
+                      "Fos",
+                      "Junb",
+                      "Hspb1",
+                      "Cxcl10",
+                      "Isg15"
+)
+
+
+DotPlot(SO4,
+features = markers.to.plot3,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+group.by = "subclass2_MD",
+col.max = 2.5)+
+coord_flip()
+
+DotPlot(SO4,
+features = markers.to.plot2,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+group.by = "subclass_MD",
+col.max = 2.5)+
+coord_flip()
+
+
+
+```
 # Saving Seurat Object
 
 ```{r}

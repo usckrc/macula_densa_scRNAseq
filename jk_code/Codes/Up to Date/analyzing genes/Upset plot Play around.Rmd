@@ -1,0 +1,320 @@
+---
+title: "subclass_md upset"
+author: "jeff karnsomprot"
+date: "2025-07-11"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: journal
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+# Loading in Data sets + Library packages.
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!requireNamespace('BiocManager', quietly = TRUE)) {install.packages('BiocManager'); require("BiocManager")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("sctransform")) {install.packages("sctransform"); require("sctransform")}
+if (!require("glmGamPoi")) {BiocManager::install('glmGamPoi'); require("glmGamPoi")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("EnhancedVolcano")) {BiocManager::install('EnhancedVolcano'); require("EnhancedVolcano")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("gghighlight")) {install.packages("gghighlight"); require("gghighlight")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("gplots")) {install.packages("gplots"); require("gplots")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("UpSetR")) {install.packages("UpSetR"); require("UpSetR")}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("ComplexHeatmap")
+
+if (!require("ComplexUpset")) {install.packages("ComplexUpset"); require("ComplexUpset")}
+
+# Remove corrupted installation
+remove.packages(c("RSQLite", "org.Mm.eg.db", "clusterProfiler"))
+
+# Install from scratch
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("RSQLite")  # Core dependency
+BiocManager::install("org.Mm.eg.db")
+BiocManager::install("clusterProfiler")
+
+
+# CRAN packages
+install.packages(c("dplyr", "magrittr"))
+library(org.Mm.eg.db)
+library(clusterProfiler)
+library(AnnotationDbi)
+library(dplyr)
+library(magrittr)
+library(ComplexUpset)
+library(ComplexHeatmap)
+
+
+library("EnhancedVolcano")
+library(UpSetR)
+
+
+
+```
+
+```{r}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+
+```{r}
+
+load(here("jk_code", "SO4analysis.rds"))
+
+SO4@meta.data <- SO4@meta.data %>%
+  mutate(subclass_MD = dplyr::case_when(
+    seurat_clusters %in% c(0,1,2,3,4,6,10) ~ "type_1",
+    seurat_clusters %in% c(5,7,12) ~ "type_2a",
+    seurat_clusters == 8 ~ "type_2b",
+    seurat_clusters == 9 ~ "type_3",
+    seurat_clusters == 11 ~ "type_4",
+    seurat_clusters == 13 ~ "type_2b",
+  ))
+
+
+SO4@meta.data$subclass_MD <- factor(
+  SO4@meta.data$subclass_MD, 
+  levels = c("type_1", "type_2a", "type_2b", "type_3","type_4")
+)
+
+```
+
+# Generating DEGs for low_salt vs control
+
+```{r}
+
+# subclass_MD = 4 types
+Idents(SO4) <- "subclass_MD"
+
+# my List of Subtypes
+subtypes <- c('type_1', 'type_2a','type_2b', 'type_3', 'type_4')
+
+# store results
+marker_list <- list()
+
+# For loop for find markers in each type 
+for (subtype in subtypes) {
+  df <- FindMarkers(
+    object = SO4,
+    ident.1 = "low_salt",
+    ident.2 = "control",
+    group.by = "treatment",
+    subset.ident = subtype,
+    min.pct = 0.1,
+    logfc.threshold = 0.25,
+    only.pos = FALSE
+  )
+  
+  # Filter for sig genes adjust as needed
+  sig_genes <- rownames(df[df$p_val_adj < 0.05, ]) # rownames extract gene names for use in upset plot
+  # store in list under subtype name ( type_1.. etc )
+  marker_list[[subtype]] <- sig_genes
+}
+
+
+```
+
+# Generating Upset Plot
+
+```{r}
+
+
+str(marker_list)
+
+# Create a Matrix
+list_to_matrix(marker_list)
+
+G1 <- list_to_matrix(marker_list)
+
+
+head(G1)
+
+m1 <-  make_comb_mat(marker_list)
+m1
+
+#Plot Upset
+
+UpSet(m1, set_order = c("type_1", "type_2a","type_2b","type_3","type_4"), comb_order = order(comb_size(m1))) 
+
+
+```
+
+
+# Extracting
+
+```{r}
+
+type_2a <- extract_comb(m1,"01000")
+type_2b <- extract_comb(m1,"00100")
+type_1 <- extract_comb(m1,"10000")
+type_3 <- extract_comb(m1,"00010")
+type_4 <- extract_comb(m1,"00001")
+
+# Initialize an empty list
+DEGS <- list()
+
+for (subtype in subtypes) {
+  df <- FindMarkers(
+    object = SO4,
+    ident.1 = "low_salt",
+    ident.2 = "control",
+    group.by = "treatment",
+    subset.ident = subtype,
+    min.pct = 0.1,
+    logfc.threshold = 0.25,
+    only.pos = FALSE
+  )
+  # Filter for significant genes
+  df2 <- df[df$p_val_adj < 0.05, ]
+  # Add a column called gene 
+  
+  df2$gene <- rownames(df2)
+  DEGS[[subtype]] <- df2
+
+}
+
+
+# Type 1
+type1markers <- DEGS$type_1 %>%
+  filter(gene %in% type_1) %>%
+  arrange(desc(avg_log2FC))
+
+
+# Type 2a
+type2amarkers <- DEGS$type_2a %>%
+  filter(gene %in% type_2a) %>%
+  arrange(desc(avg_log2FC))
+
+# Type 2b
+type2bmarkers <- DEGS$type_2b %>%
+  filter(gene %in% type_2b) %>%
+  arrange(desc(avg_log2FC))
+
+# Type 3
+type3markers <- DEGS$type_3 %>%
+  filter(gene %in% type_3) %>%
+  arrange(desc(avg_log2FC))
+
+# Type 4
+type4markers <- DEGS$type_4 %>%
+  filter(gene %in% type_4) %>%
+  arrange(desc(avg_log2FC))
+
+# For type 1
+top10_type1 <- head(type1markers, 10)
+
+# For type 2a
+top10_type2a <- head(type2amarkers, 10)
+
+# For type 2b
+top10_type2b <- head(type2bmarkers, 10)
+
+# For type 3
+top10_type3 <- head(type3markers, 10)
+
+# For type 4
+top10_type4 <- head(type4markers, 10)
+
+
+# Combine all into one data frame
+top10_all <- bind_rows(
+  top10_type1,
+  top10_type2a,
+  top10_type2b,
+  top10_type3,
+  top10_type4
+)
+
+top10_genes <- top10_all$gene
+
+DoHeatmap(SO4,features = top10_genes)
+
+```
+
+
+
+# Checking 2b
+
+```{r}
+
+
+ # Type 2b Upreg
+
+df <- type2bmarkers %>% arrange(desc(avg_log2FC))
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+DEG_list <- df2
+
+markers2up <- DEG_list %>% rownames_to_column(var="SYMBOL")
+
+ENTREZ_list <- bitr(
+  geneID = rownames(DEG_list),
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+markers2up <- ENTREZ_list %>% inner_join(markers2up, by = "SYMBOL")
+
+markers2up <- markers2up %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers2up, n = 50)
+
+pos.markers2up <- markers2up %>% dplyr::filter(avg_log2FC > 0) %>% arrange(desc(abs(avg_log2FC)))
+#change around avg log value 
+
+pos.ranks2up <- pos.markers2up$ENTREZID[abs(pos.markers2up$avg_log2FC) > 0]
+#head(pos.ranks2up)
+
+pos_go2up <- enrichGO(gene = pos.ranks2up,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go2up
+
+chart2down <- dotplot(pos_go2up) +
+    ggtitle("type 2 downregulated control") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 lines
+
+chart2down
+
+
+```

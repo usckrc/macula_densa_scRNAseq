@@ -1,0 +1,164 @@
+---
+title: "macula densa analysis subclass 4 types"
+author: "jeff karnsomprot"
+date: "2025-07-10"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: journal
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+
+---
+
+# Loading in Data sets + Library packages.
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!requireNamespace('BiocManager', quietly = TRUE)) {install.packages('BiocManager'); require("BiocManager")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("sctransform")) {install.packages("sctransform"); require("sctransform")}
+if (!require("glmGamPoi")) {BiocManager::install('glmGamPoi'); require("glmGamPoi")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("EnhancedVolcano")) {BiocManager::install('EnhancedVolcano'); require("EnhancedVolcano")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("gghighlight")) {install.packages("gghighlight"); require("gghighlight")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("gplots")) {install.packages("gplots"); require("gplots")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+
+# Install from scratch
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("RSQLite")  # Core dependency
+BiocManager::install("org.Mm.eg.db")
+BiocManager::install("clusterProfiler")
+
+
+# CRAN packages
+install.packages(c("dplyr", "magrittr"))
+library(org.Mm.eg.db)
+library(clusterProfiler)
+library(AnnotationDbi)
+library(dplyr)
+library(magrittr)
+
+
+
+
+library("EnhancedVolcano")
+library(UpSetR)
+
+```
+
+
+```{r}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+
+``` {r}
+load(here("jk_code", "JK_cleanMD.rds"))
+
+```
+
+# Analyzing DATASET
+``` {r}
+
+
+SO4@meta.data$sample <- factor(
+  SO4@meta.data$sample, 
+  levels = c("SO1","SO4","SO2","SO3"))
+  
+  
+DimPlot(SO4,split.by ="sample",group.by = "sample")
+DimPlot(SO4,group.by = "subclass2_MD",split.by = "sample")
+DimPlot(SO4,group.by = "subclass_MD",split.by = "treatment")
+
+
+DimPlot(SO4)
+
+```
+
+```{r}
+
+Idents(SO4) <- "subclass2_MD"
+
+SO.markers <- FindAllMarkers(SO4, only.pos = TRUE)
+SO.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+# save as excel file
+MD_degs <- SO.markers %>% arrange(desc(avg_log2FC))
+write.xlsx(MD_degs, file = here("jk_code", "DEGs_MD_subclass.xlsx"), rowNames = TRUE)
+
+
+SO.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 10) %>%
+    ungroup() -> top10
+
+DoHeatmap(SO4, features = top10$gene) + NoLegend()
+DimPlot(SO4)
+DimPlot(SO4,split.by = "sample")
+
+
+```
+
+
+# Markers for each type
+
+```{r}
+
+type_1 <- c("Pappa2","Pde10a","Mcub","Ramp3")
+VlnPlot(SO4,type_1)
+
+type_2 <- c("Egf","Krt7")
+VlnPlot(SO4,type_2)
+
+type_3 <- c("Fos","Socs3","Fosb","Junb")
+VlnPlot(SO4,type_3)
+
+type_4 <- c("Cxcl10","Isg15")
+VlnPlot(SO4,type_4)
+
+type_markers <- c(type_1,type_2,type_3,type_4)
+
+DotPlot(SO4,
+features = type_markers,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+```
+
+

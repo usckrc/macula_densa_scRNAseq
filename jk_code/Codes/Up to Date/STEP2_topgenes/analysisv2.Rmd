@@ -1,5 +1,5 @@
 ---
-title: "macula densaan analysis"
+title: "macula densa analysis subsubclass"
 author: "jeff karnsomprot"
 date: "2025-04-18"
 output:
@@ -99,6 +99,12 @@ load(here("jk_code", "JK_cleanMD.rds"))
 # Analyzing DATASET
 ``` {r}
 
+
+SO4@meta.data$sample <- factor(
+  SO4@meta.data$sample, 
+  levels = c("SO1","SO4","SO2","SO3"))
+  
+  
 DimPlot(SO4,split.by ="sample",group.by = "sample")
 DimPlot(SO4,group.by = "subclass2_MD",split.by = "sample")
 DimPlot(SO4,group.by = "subclass_MD",split.by = "treatment")
@@ -151,7 +157,7 @@ coord_flip()
 DimPlot(SO4)
 
 ```
-## Finding Markers for each Cluster
+## Finding Markers for each MD Sub-SUb type 
 
 ```{r}
 
@@ -168,40 +174,95 @@ SO.markers %>%
     slice_head(n = 10) %>%
     ungroup() -> top10
 
+# save as excel file
+MD_degs <- SO.markers %>% arrange(desc(avg_log2FC))
+write.xlsx(MD_degs, file = here("jk_code", "DEGs_MD_SUBSUBclass.xlsx"), rowNames = TRUE)
+
 DoHeatmap(SO4, features = top10$gene) + NoLegend()
 DimPlot(SO4)
 DimPlot(SO4,split.by = "sample")
-
-
 
 
 ```
 
 ## Finding markers between each type now
 
+### Type 1a Markers
 
-## Top genes 
 ```{r}
 
-markers.to.plot3<- c(
-  "Pappa2",
-  "Ramp3",
-  "Umod",
-  "Egf",
-  "Foxq1",
-  "Slc9a13",
-  "Cryab",
-  "Aqp1",
-  "Fos",
-  "Junb",
-  "Cxcl10"
-)
+type_1 <- c("Pappa2","Ramp3","Pde10a","Aard")
 
+VlnPlot(SO4,type_1)
+
+
+```
+
+### Type 2a Markers
+
+```{r}
+
+type_2a <- c("Egf","Umod","Cxcl12","Ckb")
+
+VlnPlot(SO4,type_2a)
+
+
+```
+
+### Type 2b Markers
+
+```{r}
+
+type_2b <- c("Foxq1","Slc9a3","Sult1d1")
+
+VlnPlot(SO4,type_2b)
+
+
+```
+```{r}
+
+# Expression isn't as high and this may not be a subcluster
+type_2c <- c("Cryab","Aqp1","Slc12a3","Calb1","Pgam2")
+
+VlnPlot(SO4,type_2c)
+
+
+```
+
+### Type 3 Markers
+
+```{r}
+
+type_3 <- c("Jun","Fos","Junb","Socs3")
+
+VlnPlot(SO4,type_3)
+
+
+```
+
+
+### Type 4 Markers
+
+```{r}
+
+type_4 <- c("Cxcl10","Isg15")
+
+VlnPlot(SO4,type_4)
+
+
+```
+
+
+## Top genes 
+
+```{r}
+
+type_markers <- c(type_1, type_2a, type_2b, type_2c, type_3, type_4)
 
                       
                       
 DotPlot(SO4,
-features = markers.to.plot3,
+features = type_markers,
 dot.scale = 8,
 dot.min = 0,
 scale = FALSE,
@@ -211,7 +272,8 @@ col.min = -2.5,
 col.max = 2.5)+
 coord_flip()
 
-```n
+```
+
 
 # Save Object
 ```{r}

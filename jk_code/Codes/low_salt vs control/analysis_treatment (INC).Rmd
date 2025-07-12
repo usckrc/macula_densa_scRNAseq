@@ -88,12 +88,13 @@ load(here("jk_code", "SO4analysis.rds"))
 
 ```{r}
 
+SO4$sample <- factor(SO4$sample, levels = c("SO1", "SO4", "SO3", "SO2"))
 
 VlnPlot(SO4,"S100g",split.by = "treatment",group.by = "sample")
 
 # Macula Densa Markers , Nos1, Avpr1a, Slc12a1, Ptgs2, and Slc9a2
 
-VlnPlot(SO4, c("Nos1","Avpr1a","Slc12a1","Ptgs2","Slc9a2"),split.by = "treatment",group.by = "treatment")
+VlnPlot(SO4, c("Nos1","Avpr1a","Slc12a1","Ptgs2","Slc9a2","Pappa2"),split.by = "treatment",group.by = "treatment")
 
 DimPlot(SO4)
 
@@ -108,19 +109,116 @@ DimPlot(SO4,group.by = "treatment",split.by = "treatment")
 #compare each type 1 control to type 1 low_treatment
 
 ```
- # Markers of control vs low_salt up/down regulation
+
+# Markers of control vs low_salt up/down regulation
+ 
+ Upregulated = low salt, positive, activated by low_salt
+ Downregulated = control, negative, supressed of low_salt
+ 
+ 
 ```{r}
 
-type_markers <- FindMarkers(
-  object = SO4,
-  ident.1 = "low_salt",   
-  ident.2 = "control",     
-  group.by = "treatment",
-  min.pct = 0.1,           
-  logfc.threshold = 0.25,  
-  only.pos = FALSE         
-)
+subtypes <- c('type_1', 'type_2a', 'type_2b', 'type_2c', 'type_3', 'type_4')
+markers_list <- list()
 
+# forloop markers for each subtype
+
+for (subtype in subtypes) {
+  markers_list[[subtype]] <- FindMarkers(
+    object = SO4,
+    ident.1 = "low_salt",
+    ident.2 = "control",
+    group.by = "treatment",
+    subset.ident = subtype,
+    min.pct = 0.1,
+    logfc.threshold = 0.25,
+    only.pos = FALSE
+  )
+}
+
+VlnPlot(SO4, features = "Pappa2", group.by = "treatment", split.by = "subclass_MD")
+
+
+DimPlot(SO4, reduction = "umap", split.by = "treatment", label = TRUE)
+
+table(SO4$subclass_MD, SO4$treatment)
+
+
+
+
+```
+
+
+```{r}
+
+for (subtype in subtypes) {
+  
+  # Top 100 upregulated genes (highest avg_log2FC)
+  up_genes <- rownames(
+    head(
+      markers_list[[subtype]][order(-markers_list[[subtype]]$avg_log2FC), ],
+      200
+    )
+  )
+
+  # Top 100 downregulated genes (lowest avg_log2FC)
+  down_genes <- rownames(
+    head(
+      markers_list[[subtype]][order(markers_list[[subtype]]$avg_log2FC), ],
+      
+    )
+  )
+
+
+  # Run enrichGO for up- and downregulated genes
+  up_enrich <- enrichGO(gene = up_genes, OrgDb = org.Mm.eg.db, keyType = "SYMBOL", ont = "BP")
+  down_enrich <- enrichGO(gene = down_genes, OrgDb = org.Mm.eg.db, keyType = "SYMBOL", ont = "BP")
+
+  # Store results
+  all_up_enrich[[subtype]] <- up_enrich
+  all_down_enrich[[subtype]] <- down_enrich
+}
+
+
+```
+
+
+```{R}
+
+for (subtype in names(all_up_enrich)) {
+# Dotplot for upregulated genes
+  print(
+    dotplot(all_up_enrich[[subtype]]) +
+      ggtitle(paste0(subtype, " Upregulated GO Terms")) +
+      theme_classic() +
+      theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)
+      ) +
+      scale_y_discrete(
+        position = "right",
+        labels = function(x) str_wrap(x, width = 25)
+      )
+  )
+
+  # Dotplot for downregulated genes
+  print(
+    dotplot(all_down_enrich[[subtype]]) +
+      ggtitle(paste0(subtype, " Downregulated GO Terms")) +
+      theme_classic() +
+      theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)
+      ) +
+      scale_y_discrete(
+        position = "right",
+        labels = function(x) str_wrap(x, width = 25)
+      )
+  )
+
+}
 ```
 
 
@@ -207,7 +305,7 @@ df_tidy <- df %>%
                
 # Graph with geom_tile
 
-df_tidy$sample <- factor(df_tidy$sample, levels = c("SO1","SO2","SO3","SO4"))
+df_tidy$sample <- factor(df_tidy$sample, levels = c("SO1","SO4","SO2","SO3"))
 
 f4 <- ggplot(df_tidy, aes(x = sample, y = Gene, fill = Expression)) +
   geom_tile(color = "black", size = 0.2, width = 0.97, height = 0.90) +  # Adds thin border and spacing between tiles
@@ -282,13 +380,13 @@ ggplot(t2, aes(fill=Cell_type, y=Frequency, x= Treatment)) +
 
 ```{r}
 
-
+levels
 
 # Change the code to use the right Seurat Object and column that separates by treatment group.
 
  Idents(SO4) <- "subclass_MD"
 
-t1 <- table(Idents(SO4), SO4$sample)[, c("SO1", "SO2","SO3","SO4")]
+t1 <- table(Idents(SO4), SO4$sample)[, c("SO1", "SO4","SO2","SO3")]
 
 t1
 
