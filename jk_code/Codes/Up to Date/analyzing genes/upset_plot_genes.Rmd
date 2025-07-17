@@ -1,0 +1,328 @@
+---
+title: "upset_plot_wip"
+author: "jeff karnsomprot"
+date: "2025-07-08"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: journal
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+# Loading in Data sets + Library packages.
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!requireNamespace('BiocManager', quietly = TRUE)) {install.packages('BiocManager'); require("BiocManager")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("sctransform")) {install.packages("sctransform"); require("sctransform")}
+if (!require("glmGamPoi")) {BiocManager::install('glmGamPoi'); require("glmGamPoi")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("EnhancedVolcano")) {BiocManager::install('EnhancedVolcano'); require("EnhancedVolcano")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("gghighlight")) {install.packages("gghighlight"); require("gghighlight")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("gplots")) {install.packages("gplots"); require("gplots")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("UpSetR")) {install.packages("UpSetR"); require("UpSetR")}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("ComplexHeatmap")
+
+if (!require("ComplexUpset")) {install.packages("ComplexUpset"); require("ComplexUpset")}
+
+# Install from scratch
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("RSQLite")  # Core dependency
+BiocManager::install("org.Mm.eg.db")
+BiocManager::install("clusterProfiler")
+
+
+# CRAN packages
+install.packages(c("dplyr", "magrittr"))
+library(org.Mm.eg.db)
+library(clusterProfiler)
+library(AnnotationDbi)
+library(dplyr)
+library(magrittr)
+library(ComplexUpset)
+library(ComplexHeatmap)
+
+
+library("EnhancedVolcano")
+library(UpSetR)
+
+
+
+```
+
+
+```{r}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+
+```{r}
+
+load(here("jk_code", "SO4_SUB_analysis.rds"))
+
+SO4 <- SO4[
+  !grepl("^(mt-|Rp|Gm)|Rik$", rownames(SO4))
+]
+```
+
+# Generating DEGs for low_salt vs control
+
+```{r}
+
+# subclass2_MD = 4 types
+Idents(SO4) <- "subclass2_MD"
+
+# my List of Subtypes
+subtypes <- c('type_1', 'type_2', 'type_3', 'type_4')
+
+# store results
+DEGS <- list()
+
+# For loop for find markers in each type
+for (subtype in subtypes) {
+  df <- FindMarkers(
+    object = SO4,
+    ident.1 = "low_salt",
+    ident.2 = "control",
+    group.by = "treatment",
+    subset.ident = subtype,
+    min.pct = 0.1,
+    logfc.threshold = 0.1,
+    only.pos = FALSE
+  )
+  df$gene <- rownames(df)  # Add gene column to the dataframe
+  DEGS[[subtype]] <- df  #Store the dataframe in the DEGS list
+  
+  }
+  
+# making list to generate upset plot
+marker_list <- list(
+  type_1 = rownames(DEGS$type_1),
+  type_2 = rownames(DEGS$type_2),
+  type_3 = rownames(DEGS$type_3),
+  type_4 = rownames(DEGS$type_4)
+)
+
+
+treatment_markers <- FindMarkers(
+    object = SO4,
+    ident.1 = "low_salt",
+    ident.2 = "control",
+    group.by = "treatment",
+    min.pct = 0.1,
+    logfc.threshold = 0.1,
+    only.pos = FALSE
+  )
+ treatment_markers$gene <- rownames(treatment_markers)
+
+
+```
+
+# Grabbing Significant Genes
+
+```{r}
+
+# Generating Unnamed List of Significant Genes
+sig_genes <- lapply(subtypes, function(subtype) {
+  rownames(DEGS[[subtype]][DEGS[[subtype]]$p_val_adj < 0.05, ])
+})
+
+# Naming the genes
+names(sig_genes) <- subtypes
+
+
+
+```
+
+
+# Upset Plot
+
+## Upset Plot ( All genes )
+
+```{r}
+
+
+str(marker_list)
+
+# Create a Matrix
+list_to_matrix(marker_list)
+
+G1 <- list_to_matrix(marker_list)
+
+head(G1)
+
+m1 <-  make_comb_mat(marker_list)
+m1
+
+#Plot Upset
+
+UpSet(m1, set_order = c("type_1", "type_2","type_3","type_4"), comb_order = order(comb_size(m1))) 
+
+
+```
+
+## Upset Plot (Significant Genes)
+
+```{r}
+
+
+str(sig_genes)
+
+# Create a Matrix
+list_to_matrix(sig_genes)
+
+G2 <- list_to_matrix(sig_genes)
+
+head(G2)
+
+m2 <-  make_comb_mat(sig_genes)
+m2
+
+#Plot Upset
+
+UpSet(m2, set_order = c("type_1", "type_2","type_3","type_4"), comb_order = order(comb_size(m2))) 
+
+
+```
+
+
+# Extracting DEGS
+
+
+## DEGS from (All genes Plot)
+
+```{r}
+
+# m1 = All Genes, m2 = Significant Genes < 0.05
+
+type_1 <- extract_comb(m1,"1000")
+
+type_2 <- extract_comb(m1,"0100")
+
+type_3 <- extract_comb(m1,"0010")
+
+type_4 <- extract_comb(m1,"0001")
+
+type_all <- extract_comb(m1,"1111")
+
+
+```
+
+# Checking Log change 
+
+Positive avg_log2FC: gene is higher in low_salt than control (upregulated in low_salt)
+
+Negative avg_log2FC: gene is lower in low_salt than control (downregulated in low_salt, or upregulated in control)
+
+```{r}
+
+# Filter for your top genes and arrang, replace top_genes with genes I may want to analyze specificall
+
+# Type 1 
+ type1markers <- DEGS$type_1 %>%
+  filter(gene %in% type_1) %>%
+  arrange(desc(avg_log2FC))
+
+# Type 2
+type2markers <- DEGS$type_2 %>%
+  filter(gene %in% type_2) %>%
+  arrange(desc(avg_log2FC))
+
+
+# Type 3
+type3markers <- DEGS$type_3 %>%
+  filter(gene %in% type_3) %>%
+  arrange(desc(avg_log2FC))
+
+
+#Type 4 
+type4markers <- DEGS$type_4 %>%
+  filter(gene %in% type_4) %>%
+  arrange(desc(avg_log2FC))
+
+#IN All
+allmarkers <- treatment_markers%>%
+  filter(gene %in% type_all) %>%
+  arrange(desc(avg_log2FC))
+
+
+```
+
+# Proportional Plot
+
+```{r}
+
+
+# Change the code to use the right Seurat Object and column that separates by treatment group.
+
+ Idents(SO4) <- "subclass2_MD"
+
+t1 <- table(Idents(SO4), SO4$treatment)[, c("control", "low_salt")]
+
+t1
+
+ 
+
+prop.t1 <- prop.table(t1, margin = 2)
+
+prop.t1
+
+ 
+
+t2 <- as.data.frame(t1)
+
+colnames(t2) <- c('MD_subtype', 'Treatment', 'Frequency')
+
+ 
+
+# Original plot
+
+ 
+
+ggplot(t2, aes(fill=MD_subtype, y=Frequency, x= Treatment)) +
+
+  geom_bar(position="fill", stat = "identity", fun.y = "mean", colour="black") +
+
+  theme_classic()
+
+```
+
+Type 1 -> increases 
+
+Type 2 -> Decreases 
+
+Type 3 -> increase
+
+Type 4 -> increase
+
+

@@ -84,13 +84,14 @@ getOption("future.globals.maxSize") #59055800320
 
 ```{r}
 
-load(here("jk_code", "SO4analysis.rds"))
+load(here("jk_code", "SO4_SUB_analysis.rds"))
 ```
 
 
 # Top genes
 
 ```{r}
+
 
 type_markers <- FindAllMarkers(SO4, only.pos = TRUE)
 type_markers %>%
@@ -111,7 +112,6 @@ type_markers <- type_markers[
 type_1_markers <- type_markers[type_markers$cluster == "type_1", ]
 type_2a_markers <- type_markers[type_markers$cluster == "type_2a", ]
 type_2b_markers <- type_markers[type_markers$cluster == "type_2b", ]
-type_2c_markers <- type_markers[type_markers$cluster == "type_2c", ]
 type_3_markers <- type_markers[type_markers$cluster == "type_3", ]
 type_4_markers <- type_markers[type_markers$cluster == "type_4", ]
 
@@ -163,7 +163,7 @@ pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
 pos_go
 
  dotplot(pos_go) +
-    ggtitle("") +
+    ggtitle("Type 1 Functions") +
     theme_classic() + 
     theme(
         plot.title = element_text(hjust = 0.5),
@@ -217,7 +217,7 @@ markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
 markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
 #head(markers, n = 50)
 
-pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 1) %>%  arrange(desc(abs(avg_log2FC))) %>% head(200)
+pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 1) %>%  arrange(desc(abs(avg_log2FC)))
 #head(pos.markers, n = 50)
 
 pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
@@ -231,7 +231,7 @@ pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
 pos_go
 
  dotplot(pos_go) +
-    ggtitle("") +
+    ggtitle("Type 2a Functions") +
     theme_classic() + 
     theme(
         plot.title = element_text(hjust = 0.5),
@@ -285,7 +285,7 @@ markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
 markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
 #head(markers, n = 50)
 
-pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 1) %>%  arrange(desc(abs(avg_log2FC))) %>% head(200)
+pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 2.5) %>%  arrange(desc(abs(avg_log2FC)))
 #head(pos.markers, n = 50)
 
 pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
@@ -324,74 +324,6 @@ VlnPlot(SO4,c("Sulf2","Bmp4","Jag1","Foxq1","Irx3"))
 ```
 
 
-### Type 2c
-
-```{r}
-df<- type_2c_markers %>% arrange(desc(avg_log2FC))
-
-
-df2 <- df %>% filter(p_val_adj < 0.05)
-
-
-DEG_list <- df2
-
-markers <- DEG_list %>% mutate(SYMBOL = gene)
-
-
-ENTREZ_list <- bitr(
-  geneID = DEG_list$gene,
-  fromType = "SYMBOL",
-  toType = "ENTREZID",
-  OrgDb = org.Mm.eg.db
-)
-
-
-markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
-
-# Removing genes that are not statistically significant. 
-markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
-#head(markers, n = 50)
-
-pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 1) %>%  arrange(desc(abs(avg_log2FC))) %>% head(200)
-#head(pos.markers, n = 50)
-
-pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
-#head(pos.ranks)
-
-pos_go <- enrichGO(gene = pos.ranks,           #a vector of entrez gene id
-                   OrgDb = "org.Mm.eg.db",    
-                   ont = "BP",
-                   readable = TRUE)              #whether mapping gene ID to gene Name
-
-pos_go
-
- dotplot(pos_go) +
-    ggtitle("") +
-    theme_classic() + 
-    theme(
-        plot.title = element_text(hjust = 0.5),
-        legend.position = "left",
-        axis.text.y = element_text(hjust = 0, size = 10)) +
-    scale_y_discrete(position = "right", 
-                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 li
- 
-```
-
-
-### Type 2c Gene View
-
-```{r}
-
-pathway_type2c <- strsplit(pos_go$geneID, "/")
-
-names(pathway_type2c) <- pos_go$Description 
-
-pathway_type2c
-
-VlnPlot(SO4, c("Aqp1","Calb1","Notch2"))
-
-```
-
 
 ## Type 3 
 
@@ -422,7 +354,7 @@ markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
 markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
 #head(markers, n = 50)
 
-pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 0) %>%  arrange(desc(abs(avg_log2FC)))
+pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 3.5) %>%  arrange(desc(abs(avg_log2FC)))
 #head(pos.markers, n = 50)
 
 pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]

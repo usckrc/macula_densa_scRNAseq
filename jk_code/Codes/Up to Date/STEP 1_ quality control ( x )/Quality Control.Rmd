@@ -1,0 +1,322 @@
+---
+title: "Quality Control"
+author: "jeff karnsomprot"
+date: "2025-06-05"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: journal
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+# Objective
+
+The goal of this session is to get a clean macula densa dataset to work with.
+
+# Load Packages
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("BiocManager")) {install.packages("BiocManager"); require("BiocManager")}
+if (!require("tibble")) {install.packages("tibble"); require("tibble")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")} #color
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("kableExtra")) {install.packages("kableExtra"); require("kableExtra")} # for color brewer
+if (!require("gplots")) {install.packages("gplots"); require("gplots")} # for color brewer
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("plotly")) {install.packages("plotly"); require("plotly")}
+library("EnhancedVolcano")
+
+
+
+```
+
+
+```{r}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+
+# Load Dataset
+``` {r}
+
+SO1 <- LoadSeuratRds(here("outputs", "so_merge_raw.rds"))
+
+head(SO1@meta.data)
+```
+
+# How many of these are actually MD cells
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=10}
+
+SO.markers <- FindAllMarkers(SO1, only.pos = TRUE)
+SO.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1)
+
+SO.markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1) %>%
+    slice_head(n = 5) %>%
+    ungroup() -> top10
+DoHeatmap(SO1, features = top10$gene) + NoLegend()
+
+markers.to.plot1 <- c("Lrp2",         # PT
+                      "Slc5a12",      # PT-S1
+                      "Slc13a3",      # PT-S2
+                      "Slc16a9",      # PT-S3
+                      "Havcr1",       # Injured PT
+                      "Epha7",        # dTL
+                      "Cryab",        # dTL
+                      "Cdh13",        # dTL1
+                      "Slc14a2",      # dTL2
+                      "Slc12a1",      # TAL
+                      "Umod",         # TAL, DCT1
+                      "Egf",          # TAL, DCT1,
+                      "Cldn10",       # TAL
+                      "Cldn16",       # TAL
+                      "Nos1",         # MD
+                      "Slc12a3",      # DCT
+                      "Pvalb",        # DCT1
+                      "Slc8a1",       # DCT2, CNT
+                      "Aqp2",         # PC
+                      "Slc4a1",       # IC-A
+                      "Slc26a4",      # IC-B
+                      "Nphs1",        # Podo
+                      "Ncam1",        # PEC
+                      "Flt1",         # Endo
+                      "Emcn",         # Glom Endo
+                      "Kdr",          # Capillary Endo
+                      "Pdgfrb",       # Perivascular
+                      "Pdgfra",       # Fib
+                      "Piezo2",       # Mesangial
+                      "Acta2",        # Mural
+                      "Ptprc",        # Immune
+                      "Cd74",         # Macrophage
+                      "Skap1",        # B/T Cells 
+                      "Upk1b",        # Uro
+                      "Top2a"         # Proliferation
+)
+                      
+DotPlot(SO1,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+DimPlot(SO1)
+
+```
+
+
+# Subset out non MD cells. 
+```{r}
+
+SO2 <- subset(SO1, idents = c("4", "5", "6", "7"), invert = TRUE)
+
+DimPlot(SO2)
+
+SO2 <- SCTransform(SO2) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:30) %>%
+    FindClusters(resolution = 2) %>%
+    RunUMAP(dims = 1:30)
+
+DimPlot(SO2)
+
+SO2 <- subset(SO2, features = grep("^mt-|^Rp|^Gm", rownames(SO2), invert = TRUE, value = TRUE))
+
+
+1
+
+
+```
+0,1,2,3,4,5,7,8,9,11,14,16,17,18,19,25,6,10,12,15,20,21,22,23,24
+
+
+# Simplifying Dataset with similarities
+
+```{r}
+
+SO4 <- SO2
+
+DotPlot(SO4,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+SO4@meta.data$seurat_clusters <- factor(
+  SO4@meta.data$seurat_clusters,
+  levels = c(
+    "0", "1", "2", "3", "4", "5", "7", "8", "9", "11", "14", "16", 
+    "17", "18","13", "19", "25", "21", "15", "20", "24", "6", "12", "22", 
+    "10", "23"
+  )
+)
+
+
+Idents(SO4) <- SO4$seurat_clusters
+
+
+## Simplifying into a few types
+
+markers.to.plot2 <- c("Pappa2",
+                      "Ptger3",
+                      "Aard",
+                      "Ptgs2",
+                      "Egf",
+                      "Umod",
+                      "Cldn19",
+                      "Foxq1",
+                      "Sult1d1",
+                      "Fos",
+                      "Junb",
+                      "Hspb1",
+                      "Cxcl12",
+                      "Isg15",
+                      "Cxcl10"
+)
+
+DimPlot(SO4)
+
+
+DotPlot(SO4,
+features = markers.to.plot2,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+group.by = "seurat_clusters",
+col.max = 2.5)+
+coord_flip()
+
+
+
+
+```
+
+
+# Assigning Subclasses for clusters
+
+```{r}
+
+SO4@meta.data <- SO4@meta.data %>%
+  mutate(subclass_MD = dplyr::case_when(
+    seurat_clusters %in% c(0,1,2,3,4,5,7,8,11,14,16,17,18,13,19,21) ~ "type_1",
+    seurat_clusters %in% c(6,20,24,15,12) ~ "type_2a",
+    seurat_clusters %in% c(10,22) ~ "type_2b",
+      seurat_clusters %in% c(9,25) ~ "type_3",
+    seurat_clusters == 23 ~ "type_4",
+  ))
+
+
+SO4@meta.data$subclass_MD <- factor(
+  SO4@meta.data$subclass_MD, 
+  levels = c("type_1", "type_2a", "type_2b","type_3","type_4")
+)
+
+
+SO4@meta.data <- SO4@meta.data %>%
+  mutate(subclass2_MD = dplyr::case_when(
+    seurat_clusters %in% c(0,1,2,3,4,5,7,8,11,14,16,17,18,13,19) ~ "type_1",
+    seurat_clusters %in% c(6,20,21,24,10,12,15,22) ~ "type_2",
+    seurat_clusters %in% c(9,25) ~ "type_3",
+    seurat_clusters == 23 ~ "type_4"
+  ))
+
+SO4@meta.data$subclass2_MD <- factor(
+  SO4@meta.data$subclass2_MD, 
+  levels = c("type_1", "type_2","type_3","type_4")
+)
+
+Idents(SO4) <- SO4@meta.data$subclass_MD
+
+DimPlot(object = SO4, reduction = "umap", group.by = "subclass_MD", label = TRUE)
+DimPlot(object = SO4, reduction = "umap", group.by = "subclass2_MD", label = TRUE)
+DimPlot(SO4,group.by = "subclass2_MD",split.by = "treatment")
+DimPlot(SO4,group.by = "seurat_clusters")
+
+
+```
+
+# Viewing genes that differentiate each Type
+
+```{r}
+
+markers.to.plot3 <- c("Pappa2",
+                      "Egf",
+                      "Umod",
+                      "Foxq1",
+                      "Sult1d1",
+                      "Fos",
+                      "Junb",
+                      "Cxcl10"
+                      
+)
+
+
+DotPlot(SO4,
+features = markers.to.plot3,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+group.by = "subclass2_MD",
+col.max = 2.5)+
+coord_flip()
+
+DotPlot(SO4,
+features = markers.to.plot3,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+group.by = "subclass_MD",
+col.max = 2.5)+
+coord_flip()
+
+
+
+```
+# Saving Seurat Object
+
+```{r}
+
+save(SO4, file = here("jk_code", "JK_cleanMD.rds"))
+
+```

@@ -82,11 +82,13 @@ getOption("future.globals.maxSize") #59055800320
 
 ```{r}
 
-load(here("jk_code", "SO4analysis.rds"))
+load(here("jk_code", "SO4_SUB_analysis.rds"))
 ```
 
 
 ```{r}
+
+Idents(SO4) <- "subclass2_MD"
 
 SO4$sample <- factor(SO4$sample, levels = c("SO1", "SO4", "SO3", "SO2"))
 
@@ -118,66 +120,13 @@ DimPlot(SO4,group.by = "treatment",split.by = "treatment")
  
 ```{r}
 
-subtypes <- c('type_1', 'type_2a', 'type_2b', 'type_2c', 'type_3', 'type_4')
-markers_list <- list()
-
-# forloop markers for each subtype
-
-for (subtype in subtypes) {
-  markers_list[[subtype]] <- FindMarkers(
-    object = SO4,
-    ident.1 = "low_salt",
-    ident.2 = "control",
-    group.by = "treatment",
-    subset.ident = subtype,
-    min.pct = 0.1,
-    logfc.threshold = 0.25,
-    only.pos = FALSE
-  )
-}
-
 VlnPlot(SO4, features = "Pappa2", group.by = "treatment", split.by = "subclass_MD")
 
 
 DimPlot(SO4, reduction = "umap", split.by = "treatment", label = TRUE)
 
-table(SO4$subclass_MD, SO4$treatment)
 
 
-
-
-```
-
-
-```{r}
-
-for (subtype in subtypes) {
-  
-  # Top 100 upregulated genes (highest avg_log2FC)
-  up_genes <- rownames(
-    head(
-      markers_list[[subtype]][order(-markers_list[[subtype]]$avg_log2FC), ],
-      200
-    )
-  )
-
-  # Top 100 downregulated genes (lowest avg_log2FC)
-  down_genes <- rownames(
-    head(
-      markers_list[[subtype]][order(markers_list[[subtype]]$avg_log2FC), ],
-      
-    )
-  )
-
-
-  # Run enrichGO for up- and downregulated genes
-  up_enrich <- enrichGO(gene = up_genes, OrgDb = org.Mm.eg.db, keyType = "SYMBOL", ont = "BP")
-  down_enrich <- enrichGO(gene = down_genes, OrgDb = org.Mm.eg.db, keyType = "SYMBOL", ont = "BP")
-
-  # Store results
-  all_up_enrich[[subtype]] <- up_enrich
-  all_down_enrich[[subtype]] <- down_enrich
-}
 
 
 ```
@@ -185,51 +134,173 @@ for (subtype in subtypes) {
 
 ```{R}
 
-for (subtype in names(all_up_enrich)) {
-# Dotplot for upregulated genes
-  print(
-    dotplot(all_up_enrich[[subtype]]) +
-      ggtitle(paste0(subtype, " Upregulated GO Terms")) +
-      theme_classic() +
-      theme(
-        plot.title = element_text(hjust = 0.5),
-        legend.position = "left",
-        axis.text.y = element_text(hjust = 0, size = 10)
-      ) +
-      scale_y_discrete(
-        position = "right",
-        labels = function(x) str_wrap(x, width = 25)
-      )
-  )
+Idents(SO4) <- "treatment"
 
-  # Dotplot for downregulated genes
-  print(
-    dotplot(all_down_enrich[[subtype]]) +
-      ggtitle(paste0(subtype, " Downregulated GO Terms")) +
-      theme_classic() +
-      theme(
-        plot.title = element_text(hjust = 0.5),
-        legend.position = "left",
-        axis.text.y = element_text(hjust = 0, size = 10)
-      ) +
-      scale_y_discrete(
-        position = "right",
-        labels = function(x) str_wrap(x, width = 25)
-      )
-  )
+type_markers <- FindMarkers(
+  object = SO4,
+  ident.1 = "low_salt",   
+  ident.2 = "control",     
+  group.by = "treatment",
+  min.pct = 0.1,           
+  logfc.threshold = 0.1,  
+  only.pos = FALSE         
+)
 
-}
+ type_markers$gene <- rownames(type_markers)
+ 
+type_markers <-type_markers %>% arrange(desc(avg_log2FC))
+ 
+
 ```
 
-
-# top 20 genes shown by treatment groups
+##  Pathway Upregulated = Low salt 
 
 ```{r}
 
-df3 <- type_markers %>%
-  arrange(desc(avg_log2FC)) %>%
-  head(15)
+df<- type_markers 
 
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+
+DEG_list <- df2
+
+markers1up <- DEG_list %>% rownames_to_column(var="SYMBOL")
+
+
+ENTREZ_list <- bitr(
+  geneID = rownames(DEG_list),
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+markers1up <-  ENTREZ_list %>% inner_join(markers1up, by = "SYMBOL")
+
+markers1up <-  markers1up %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers1up <-  markers1up %>% dplyr::filter(avg_log2FC > 0.4) %>%  arrange(desc(abs(avg_log2FC))) 
+#change around avg log value 
+
+pos.ranks1up <- pos.markers1up$ENTREZID[abs(pos.markers1up$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go1up <- enrichGO(gene = pos.ranks1up,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go1up
+
+ chart1up <- dotplot(pos_go1up) +
+    ggtitle("upregulated lowsalt") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 lines
+ 
+
+chart1up
+
+```
+### Upregulation Gene View 
+
+```{r}
+pathway_type1up <- strsplit(pos_go1up$geneID, "/")
+
+names(pathway_type1up) <- pos_go1up$Description 
+
+pathway_type1up
+
+```
+
+## Downregulation Pathway
+
+```{r}
+
+# Arrange and filter DEGs
+
+df <- type_markers %>% arrange(desc(avg_log2FC))
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+DEG_list <- df2
+
+markers1down <- DEG_list %>% rownames_to_column(var="SYMBOL")
+
+ENTREZ_list <- bitr(
+  geneID = rownames(DEG_list),
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+markers1down <- ENTREZ_list %>% inner_join(markers1down, by = "SYMBOL")
+
+markers1down <- markers1down %>% dplyr::filter(p_val_adj < 0.05)
+
+pos.markers1down <- markers1down %>% dplyr::filter(avg_log2FC < 0) %>% arrange(desc(abs(avg_log2FC)))
+
+pos.ranks1down <- pos.markers1down$ENTREZID[abs(pos.markers1down$avg_log2FC) > 0.4]
+
+# GO enrichment for downregulated genes
+pos_go1down <- enrichGO(
+  gene = pos.ranks1down,
+  OrgDb = org.Mm.eg.db,
+  ont = "BP",
+  readable = TRUE
+)
+
+pos_go1down
+
+# Visualization
+chart1down <- dotplot(pos_go1down) +
+  ggtitle("type 1 downregulated control") +
+  theme_classic() +
+  theme(
+    plot.title = element_text(hjust = 0.5),
+    legend.position = "left",
+    axis.text.y = element_text(hjust = 0, size = 10)
+  ) +
+  scale_y_discrete(
+    position = "right",
+    labels = function(x) str_wrap(x, width = 25)
+  )
+
+chart1down
+
+```
+
+###  Downreg Gene View 
+
+```{r}
+pathway_type1down <- strsplit(pos_go1down$geneID, "/")
+
+names(pathway_type1down) <- pos_go1down$Description 
+
+pathway_type1down
+
+
+```
+
+
+```{r}
+
+# Start filtering process here
+# Maybe use genes you discover from Upset Plot
+# Maybe  try with subtypes fitler genes
+
+
+gyarmati <- c("Fabp3", "Ccn1", "Foxq1", "Cxcl12", "Vash2", "Pamr1", "Vegfd", "Ccn3", "Bmp3", "Fgf9", "Spp1", "Wnt10a", "Sfrp1", "Tcf4", "Pappa2", "Unc5d", "Sema3c", "Robo2", "Slit2", "Egfl6", "Hgfac", "Pdgfc", "Megf9", "Frem1", "Thsd4", "Spock2", "Mmp14", "Adamtsl2", "Car8", "Irx1", "Irx2", "Hoxd11", "Hoxc4", "Etv1")
+
+df3 <- type_markers %>%
+  filter(gene %in% gyarmati) %>%
+  arrange(desc(avg_log2FC))
+  
 df3 <- rownames(df3)
 
 df <- AverageExpression(
@@ -246,6 +317,8 @@ df <- t(scale(t(df)))
 
 # convert df to tidy format
 
+# only use about 10-15 genes
+
 df_tidy <- df %>%
   as.data.frame() %>%
   rownames_to_column(var = "Gene") %>%
@@ -253,7 +326,7 @@ df_tidy <- df %>%
                
 # Graph with geom_tile
 
-df_tidy$treatment <- factor(df_tidy$treatment, levels = c("control","low_salt"))
+df_tidy$treatment <- factor(df_tidy$treatment, levels = c("control","low-salt"))
 
 f4 <- ggplot(df_tidy, aes(x = treatment, y = Gene, fill = Expression)) +
   geom_tile(color = "black", size = 0.2, width = 0.97, height = 0.90) +  # Adds thin border and spacing between tiles
@@ -264,6 +337,7 @@ f4 <- ggplot(df_tidy, aes(x = treatment, y = Gene, fill = Expression)) +
     axis.title = element_text(size = 14),
     axis.ticks = element_blank(),         # Removes tick marks
     panel.grid = element_blank(),          # Removes grid lines
+    
     legend.position = "bottom",            # Centers the legend below the plot
     legend.title = element_text(size = 14), # Increases legend title size
     legend.text = element_text(size = 12)   # Increases legend text size
@@ -273,14 +347,17 @@ f4 <- ggplot(df_tidy, aes(x = treatment, y = Gene, fill = Expression)) +
 f4
 
 ```
-# top 20 genes shown by samples
+
+
 
 ```{r}
 
 
+
+
 df3 <- type_markers %>%
-  arrange(desc(avg_log2FC)) %>%
-  head(15)
+  filter(gene %in% gyarmati) %>%
+  arrange(desc(avg_log2FC))
 
 df3 <- rownames(df3)
 
@@ -303,6 +380,7 @@ df_tidy <- df %>%
   rownames_to_column(var = "Gene") %>%
   pivot_longer(cols = -Gene, names_to = "sample", values_to = "Expression")
                
+
 # Graph with geom_tile
 
 df_tidy$sample <- factor(df_tidy$sample, levels = c("SO1","SO4","SO2","SO3"))
@@ -320,98 +398,57 @@ f4 <- ggplot(df_tidy, aes(x = sample, y = Gene, fill = Expression)) +
     legend.title = element_text(size = 14), # Increases legend title size
     legend.text = element_text(size = 12)   # Increases legend text size
   ) +
-  labs(x = "Cell Type", y = "Gene", fill = "Relative Expression")
+  labs(x = "Sample", y = "Gyarmati Genes", fill = "Relative Expression")
 
 f4
 
 ```
 
+# Grouping as Treatment groups
+
+
+```{r}
+
+
+# 1. Create new sample groups
+
+treatmentgroup <- df_tidy %>%
+  mutate(
+    sample = case_when(
+      sample %in% c("SO1", "SO4") ~ "SO1_SO4",
+      sample %in% c("SO2", "SO3") ~ "SO2_SO3"
+    )
+  ) %>%
+  
+  # 2. Sum (or use mean) of Expression within each group for each Gene
+  group_by(Gene, sample) %>%
+  summarize(Expression = mean(Expression), .groups = "drop")  # Use mean() if you prefer averaging
+
+treatmentgroup$sample <- factor(treatmentgroup$sample, levels = c("SO1_SO4", "SO2_SO3"))
+f4_grouped <- ggplot(treatmentgroup, aes(x = sample, y = Gene, fill = Expression)) +
+  geom_tile(color = "black", size = 0.2, width = 0.97, height = 0.90) +
+  scale_fill_distiller(palette = "RdYlBu") +
+  theme_minimal() +
+  theme(
+    axis.text = element_text(size = 12, color = "black"),
+    axis.title = element_text(size = 14),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    legend.position = "bottom",
+    legend.title = element_text(size = 14),
+    legend.text = element_text(size = 12)
+  ) +
+  labs(x = "Control                                        Low Salt ", y = "Gyarmati Genes", fill = "Relative Expression")
+
+f4_grouped
+
+
+```
 # HeatMap of each clusters top genes from pathway analysis
 
 ```{r}
 
-
-genes123 <- c("Pappa2","Mcub","Ptgs2","Aard","Egf", "Umod", "Cldn19", "Foxq1", "Jun", "Fos", 
-              "Socs3", "Hspb1", "Dusp1", "Trib1", "Cxcl10", 
-              "Isg15", "Ifit1")
-
-DoHeatmap(SO4,features = genes123)
-
-```
-# Proportional Plot
-
-```{r}
-
-
-# Change the code to use the right Seurat Object and column that separates by treatment group.
-
- Idents(SO4) <- "subclass_MD"
-
-t1 <- table(Idents(SO4), SO4$treatment)[, c("control", "low_salt")]
-
-t1
-
- 
-
-prop.t1 <- prop.table(t1, margin = 2)
-
-prop.t1
-
- 
-
-t2 <- as.data.frame(t1)
-
-colnames(t2) <- c('Cell_type', 'Treatment', 'Frequency')
-
- 
-
-# Original plot
-
- 
-
-ggplot(t2, aes(fill=Cell_type, y=Frequency, x= Treatment)) +
-
-  geom_bar(position="fill", stat = "identity", fun.y = "mean", colour="black") +
-
-  theme_classic()
+VlnPlot(SO4,split.by = "treatment","Wnt10a")
 
 ```
 
-
-```{r}
-
-levels
-
-# Change the code to use the right Seurat Object and column that separates by treatment group.
-
- Idents(SO4) <- "subclass_MD"
-
-t1 <- table(Idents(SO4), SO4$sample)[, c("SO1", "SO4","SO2","SO3")]
-
-t1
-
- 
-
-prop.t1 <- prop.table(t1, margin = 2)
-
-prop.t1
-
- 
-
-t2 <- as.data.frame(t1)
-
-colnames(t2) <- c('Cell_type', 'sample', 'Frequency')
-
- 
-
-# Original plot
-
- 
-
-ggplot(t2, aes(fill=Cell_type, y=Frequency, x= sample)) +
-
-  geom_bar(position="fill", stat = "identity", fun.y = "mean", colour="black") +
-
-  theme_classic()
-
-```

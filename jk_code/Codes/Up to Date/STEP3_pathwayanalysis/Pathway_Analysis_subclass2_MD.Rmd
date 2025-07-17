@@ -84,7 +84,7 @@ getOption("future.globals.maxSize") #59055800320
 
 ```{r}
 
-load(here("jk_code", "SO4analysis.rds"))
+load(here("jk_code", "SO4_SUB_analysis.rds"))
 ```
 
 
