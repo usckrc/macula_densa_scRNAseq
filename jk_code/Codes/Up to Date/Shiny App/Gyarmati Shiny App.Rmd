@@ -19,31 +19,10 @@ output:
 
 ```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
 
-options(repos = c(CRAN = "https://cloud.r-project.org"))
-if (!require("knitr")) {install.packages("knitr"); require("knitr")}
-if (!requireNamespace('BiocManager', quietly = TRUE)) {install.packages('BiocManager'); require("BiocManager")}
+
+if (!require("magrittr")) {install.packages("magrittr"); require("magrittr")}
 if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
-if (!require("stringr")) {install.packages("stringr"); require("stringr")}
-if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
-if (!require("sctransform")) {install.packages("sctransform"); require("sctransform")}
-if (!require("glmGamPoi")) {BiocManager::install('glmGamPoi'); require("glmGamPoi")}
-if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
-if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
-if (!require("EnhancedVolcano")) {BiocManager::install('EnhancedVolcano'); require("EnhancedVolcano")}
-if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
-if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
-if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")}
-if (!require("car")) {install.packages("car"); require("car")}
-if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
-if (!require("readxl")) {install.packages("readxl"); require("readxl")}
-if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
-if (!require("gghighlight")) {install.packages("gghighlight"); require("gghighlight")}
-if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
-if (!require("data.table")) {install.packages("data.table"); require("data.table")}
 if (!require("here")) {install.packages("here"); require("here")}
-if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
-if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
-if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
 if (!require("gplots")) {install.packages("gplots"); require("gplots")}
 if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
 if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
@@ -55,11 +34,6 @@ if (!require("BiocManager", quietly = TRUE))
 
 devtools::install_github("SGDDNB/ShinyCell")
 
-# CRAN packages
-install.packages(c("dplyr", "magrittr"))
-library(dplyr)
-library(magrittr)
-library(shiny)
 
 
 
@@ -73,7 +47,7 @@ library(UpSetR)
 
 
 ``` {r}
-load(here("jk_code", "SO4_SUB_analysis.rds"))
+load(here("jk_code", "SO4_SUB_NEW_analysis.rds"))
 
 ```
 
@@ -131,8 +105,8 @@ seu@meta.data
 ```{r}
 
 seu$SCT_snn_res.2 <- NULL
+seu$SCT_snn_res.0.7 <- NULL
 seu$SCT_snn_res.0.1 <- NULL
-seu$SCT_snn_res.0.8 <- NULL
 seu$orig.ident <- NULL
 
 colnames(seu@meta.data)[colnames(seu@meta.data) == "seurat_clusters"] ="Seurat Clusters"
