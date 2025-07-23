@@ -1,0 +1,158 @@
+---
+title: "Macula Densa snRNAseq Quality Control"
+author: "Jonathan Nelson"
+date: "`r format(Sys.time(), '%d %B %Y')`"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: bootstrap
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("BiocManager")) {install.packages("BiocManager"); require("BiocManager")}
+if (!require("tibble")) {install.packages("tibble"); require("tibble")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")} #color
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("kableExtra")) {install.packages("kableExtra"); require("kableExtra")} # for color brewer
+if (!require("gplots")) {install.packages("gplots"); require("gplots")} # for color brewer
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+library("EnhancedVolcano")
+library(UpSetR)
+library(ComplexHeatmap)
+#install.packages("ggtext")
+library(ggtext)
+library(CellChat)
+library(patchwork)
+options(stringsAsFactors = FALSE)
+here()
+
+```
+
+```{r}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+
+# Load Macula Densa .rds file
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+SO <- readRDS(here("outputs", "so_merge_raw.rds"))
+
+head(SO@meta.data)
+
+DimPlot(SO)
+
+cells_raw <- colnames(SO)
+
+```
+
+
+# Load Filtered Macula Densa .rds file
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+SO2 <- readRDS(here("outputs", "so_merge.rds"))
+
+head(SO2@meta.data)
+
+DimPlot(SO2)
+
+cells_filtered <- colnames(SO2)
+
+```
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+VlnPlot(SO, "Pappa2", group.by = "treatment")
+
+```
+
+
+## nFeatures, nCounts, and percent.mt
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+set1 <- cells_raw
+set2 <- cells_filtered
+venn <- ggvenn(list(Raw = set1, Filtered = set2))
+print(venn)
+
+lst <- list(set1, set2)
+ItemsList <- venn(lst, show.plot = FALSE)
+
+test <- attributes(ItemsList)$intersections
+
+head(test$A, 5)
+
+not_in_filtered <- test$A
+
+```
+
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+# Create a new metadata column to flag cells
+SO$highlight_group <- ifelse(colnames(SO) %in% not_in_filtered, "Not in Filtered", "Other")
+
+# Set colors: red for highlighted cells, gray for others
+DimPlot(SO, group.by = "highlight_group", cols = c("Not in Filtered" = "red", "Other" = "gray")) +
+  ggtitle("Cells in 'not_in_filtered' Highlighted in Red")
+
+```
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=10, fig.height=6}
+
+# Set colors: red for highlighted cells, gray for others
+DimPlot(SO, group.by = "highlight_group", cols = c("Not in Filtered" = "red", "Other" = "gray"), split.by = "treatment") +
+  ggtitle("Cells in 'not_in_filtered' Highlighted in Red")
+
+```
+
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE, fig.width=20, fig.height=6}
+
+# Set colors: red for highlighted cells, gray for others
+DimPlot(SO, group.by = "highlight_group", cols = c("Not in Filtered" = "red", "Other" = "gray"), split.by = "sample") +
+  ggtitle("Cells in 'not_in_filtered' Highlighted in Red")
+
+```
+
+# Session Info
+
+```{r, echo=TRUE, warning=FALSE, error=FALSE, message=FALSE}
+
+sessionInfo()
+
+```
+
+
+  
