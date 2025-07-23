@@ -84,7 +84,7 @@ getOption("future.globals.maxSize") #59055800320
 
 ```{r}
 
-load(here("jk_code", "SO4_SUB_analysis.rds"))
+load(here("jk_code", "SO4_SUB_NEW_analysis.rds"))
 ```
 
 
@@ -92,11 +92,14 @@ load(here("jk_code", "SO4_SUB_analysis.rds"))
 
 ```{r}
 
+Idents(SO4) <- "subclass_MD"
 
-type_markers <- FindAllMarkers(SO4, only.pos = TRUE)
-type_markers %>%
-    group_by(cluster) %>%
-    dplyr::filter(avg_log2FC > 1)
+type_markers <- FindAllMarkers(SO4, 
+                          only.pos = TRUE,
+                          logfc.threshold = 0.1,
+                          min.pct = 0.1,
+                          min.diff.pct = 0.05,
+                          return.thresh = 0.05)
 
 
 type_markers <- type_markers[
@@ -149,7 +152,7 @@ markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
 markers <-  markers %>% dplyr::filter(p_val_adj < 0.005)
 #head(markers, n = 50)
 
-pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 0.6) %>%  arrange(desc(abs(avg_log2FC)))
+pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 0.5) %>%  arrange(desc(abs(avg_log2FC)))
 #head(pos.markers, n = 50)
 
 pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
@@ -217,7 +220,7 @@ markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
 markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
 #head(markers, n = 50)
 
-pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 1) %>%  arrange(desc(abs(avg_log2FC)))
+pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 0.8) %>%  arrange(desc(abs(avg_log2FC)))
 #head(pos.markers, n = 50)
 
 pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
@@ -285,7 +288,7 @@ markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
 markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
 #head(markers, n = 50)
 
-pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 2.5) %>%  arrange(desc(abs(avg_log2FC)))
+pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 2) %>%  arrange(desc(abs(avg_log2FC)))
 #head(pos.markers, n = 50)
 
 pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]
@@ -354,7 +357,7 @@ markers <-  ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
 markers <-  markers %>% dplyr::filter(p_val_adj < 0.05)
 #head(markers, n = 50)
 
-pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 3.5) %>%  arrange(desc(abs(avg_log2FC)))
+pos.markers <-  markers %>% dplyr::filter(avg_log2FC > 2) %>%  arrange(desc(abs(avg_log2FC)))
 #head(pos.markers, n = 50)
 
 pos.ranks <- pos.markers$ENTREZID[abs(pos.markers$avg_log2FC) > 0]

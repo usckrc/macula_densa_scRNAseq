@@ -87,7 +87,7 @@ getOption("future.globals.maxSize") #59055800320
 
 ```{r}
 
-load(here("jk_code", "SO4_SUB_analysis.rds"))
+load(here("jk_code", "SO4_SUB_NEW_analysis.rds"))
 
 SO4 <- SO4[
   !grepl("^(mt-|Rp|Gm)|Rik$", rownames(SO4))
@@ -232,19 +232,17 @@ UpSet(m2, set_order = c("type_1", "type_2","type_3","type_4"), comb_order = orde
 
 # m1 = All Genes, m2 = Significant Genes < 1
 
-type_1 <- extract_comb(m1,"1000")
+type_1 <- extract_comb(m2,"1000")
 
-type_2 <- extract_comb(m1,"0100")
+type_2 <- extract_comb(m2,"0100")
 
-type_3 <- extract_comb(m1,"0010") 
+type_3 <- extract_comb(m2,"0010") 
 
-type_4 <- extract_comb(m1,"1110") # type 123
+type_4 <- extract_comb(m2,"0001") # type 123
 
-type_12 <- extract_comb(m1,"1100") 
+type_12 <- extract_comb(m2,"1100") 
 
-type_all <- extract_comb(m1,"1111")
-
-list <- extract_comb(m1,"1111")
+type_all <- extract_comb(m2,"1111")
 
 
 
@@ -276,8 +274,7 @@ type3markers <- DEGS$type_3 %>%
   filter(gene %in% type_3) %>%
   arrange(desc(avg_log2FC))
 
-
-type4markers <- treatment_markers %>%
+type4markers <- DEGS$type_4 %>%
   filter(gene %in% type_4) %>%
   arrange(desc(avg_log2FC)) 
 
@@ -346,12 +343,12 @@ pathway_analysis <- function(type_markers, type_name)
 ```{r}
 
 
-results_type1 <- pathway_analysis(subset(type1markers, avg_log2FC > 0), "type 1")
-results_type2 <- pathway_analysis(subset(type2markers, avg_log2FC > 0.2), "type 2")
-results_type3 <- pathway_analysis(subset(type3markers, avg_log2FC > 0.3), "type 3")
-results_type4 <- pathway_analysis(subset(type4markers, avg_log2FC > 0.3), "type 123")
-results_typeall <- pathway_analysis(subset(typeallmarkers, avg_log2FC > 0.2), "type all")
-results_type12 <- pathway_analysis(subset(type12markers, avg_log2FC > 0.15), "type 1 and 2 ")
+results_type1 <- pathway_analysis(subset(type1markers, avg_log2FC > 0.2), "type 1")
+results_type2 <- pathway_analysis(subset(type2markers, avg_log2FC > 0), "type 2")
+results_type3 <- pathway_analysis(subset(type3markers, avg_log2FC > 0), "type 3")
+results_type4 <- pathway_analysis(subset(type4markers, avg_log2FC > 0), "type 4")
+results_typeall <- pathway_analysis(subset(typeallmarkers, avg_log2FC > 0), "type all")
+results_type12 <- pathway_analysis(subset(type12markers, avg_log2FC > 0), "type 1 and 2 ")
 
 results_type1
 results_type2

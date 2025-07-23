@@ -84,7 +84,7 @@ getOption("future.globals.maxSize") #59055800320
 
 ```{r}
 
-load(here("jk_code", "SO4_SUB_analysis.rds"))
+load(here("jk_code", "SO4_SUB_NEW_analysis.rds"))
 ```
 
 
@@ -94,10 +94,12 @@ load(here("jk_code", "SO4_SUB_analysis.rds"))
 
 Idents(SO4) <- "subclass2_MD"
 
-type_markers <- FindAllMarkers(SO4, only.pos = TRUE)
-type_markers %>%
-    group_by(cluster) %>%
-    dplyr::filter(avg_log2FC > 1)
+type_markers <- FindAllMarkers(SO4, 
+                          only.pos = TRUE,
+                          logfc.threshold = 0.1,
+                          min.pct = 0.1,
+                          min.diff.pct = 0.05,
+                          return.thresh = 0.05)
 
 
 type_markers <- type_markers[
@@ -169,6 +171,8 @@ pos_go1
         axis.text.y = element_text(hjust = 0, size = 10)) +
     scale_y_discrete(position = "right", 
                      labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 lines
+ 
+ chart1
 ```
 
 
@@ -237,6 +241,7 @@ chart2 <- dotplot(pos_go2) +
         axis.text.y = element_text(hjust = 0, size = 10)) +
     scale_y_discrete(position = "right", 
                      labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 li
+chart2
  
 ```
 
@@ -307,6 +312,8 @@ pos_go3
         axis.text.y = element_text(hjust = 0, size = 10)) +
     scale_y_discrete(position = "right", 
                      labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 li
+ 
+ chart3
 ```
 
 
@@ -376,6 +383,8 @@ pos_go4
         axis.text.y = element_text(hjust = 0, size = 10)) +
     scale_y_discrete(position = "right", 
                      labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 li
+ 
+ chart4
 ```
 
 ### View Type 4 Genes
@@ -397,9 +406,10 @@ VlnPlot(SO4, features = c("Cxcl10","Isg15","Ifit1"))
 
 ```{r}
 
-chart1+chart2
-
-chart3+chart4
+chart1
+chart2
+chart3
+chart4
 
 ```
 
