@@ -1,0 +1,185 @@
+---
+title: "Macula Densa Shiny Cell"
+author: "jeff karnsomprot"
+date: "2025-07-14"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: journal
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+
+---
+
+# Loading in Data sets + Library packages.
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+
+if (!require("magrittr")) {install.packages("magrittr"); require("magrittr")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("gplots")) {install.packages("gplots"); require("gplots")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("shinyhelper")) {install.packages("shinyhelper"); require("shinyhelper")}
+
+# Install from scratch
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+devtools::install_github("SGDDNB/ShinyCell")
+
+
+
+
+
+library("EnhancedVolcano")
+library(UpSetR)
+
+```
+
+# Loading Dataset
+
+
+``` {r}
+load(here("jk_code", "JK_clean_MD_2.rds"))
+
+```
+
+
+```{r}
+
+# Shinycell installation
+reqPkg = c("data.table", "Matrix", "hdf5r", "reticulate", "ggplot2", 
+           "gridExtra", "glue", "readr", "RColorBrewer", "R.utils", "Seurat")
+newPkg = reqPkg[!(reqPkg %in% installed.packages()[,"Package"])]
+if(length(newPkg)){install.packages(newPkg)}
+
+devtools::install_github("SGDDNB/ShinyCell")
+
+library(shinyhelper) 
+
+# If you are using h5ad file as input, run the code below as well
+# reticulate::py_install("anndata")
+
+#devtools::install_github("SGDDNB/ShinyCell")
+
+
+################### 2. Skip if the seurat object is ready to be loaded directly. --------------------------------------------------
+
+seu <- SO4
+
+head(seu@meta.data)
+
+# The down-size step is redundant - as ShinyCell does this automatically. Keeping the following lines here just for the record.
+# Down-size the seurat object by removing the raw counts, keeping the scaled.data, and keeping one assay --------------------------
+# seu <- DietSeurat(seu, counts = FALSE, scale.data = TRUE, dimreducs = "umap", assays = "RNA")
+
+# Below is the DietSeurat() function details.
+# DietSeurat(
+#   object,
+#   counts = TRUE, # Preserve the count matrices for the assays specified
+#   data = TRUE, # Preserve the data slot for the assays specified
+#   scale.data = FALSE, # Preserve the scale.data slot for the assays specified
+#   features = NULL, # Only keep a subset of features, defaults to all features
+#   assays = NULL, # Only keep a subset of assays specified here
+#   dimreducs = NULL, # Only keep a subset of DimReducs specified here (if NULL, remove all DimReducs)
+#   graphs = NULL, # Only keep a subset of Graphs specified here (if NULL, remove all Graphs)
+#   misc = TRUE # Preserve the misc slot; default is TRUE
+# )
+
+# Clean up the meta.data for more user-friendly interface (not required) ----------------------------------------------------------
+
+seu@meta.data
+
+```
+
+
+# Cleaning up Data
+
+```{r}
+
+seu$SCT_snn_res.2 <- NULL
+seu$SCT_snn_res.0.1 <- NULL
+seu$orig.ident <- NULL
+
+colnames(seu@meta.data)[colnames(seu@meta.data) == "seurat_clusters"] ="Seurat Clusters"
+colnames(seu@meta.data)[colnames(seu@meta.data) == "percent.mt"] ="Percent Mitochondria"
+colnames(seu@meta.data)[colnames(seu@meta.data) == "sample"] ="Samples"
+colnames(seu@meta.data)[colnames(seu@meta.data) == "supergroup"] ="Macula Densa Subtypes"
+colnames(seu@meta.data)[colnames(seu@meta.data) == "manual_groups"] ="Deeper Macula Densa Subtypes"
+colnames(seu@meta.data)[colnames(seu@meta.data) == "treatment"] ="Treatment"
+
+
+# Reorder the columns from important ones as the order will be consistent with the drop-down menu
+colnames(seu@meta.data) # Get all column names
+
+
+```
+
+
+# Reorder Metadata
+
+
+```{r}
+
+# [1] "nCount_RNA"           "nFeature_RNA"         "Seurat Clusters"      "Percent Mitochondria" "Unnamed Clusters"    
+# [6] "nCount_SCT"           "nFeature_SCT"         "Samples"              "Batch"                "Animal ID"           
+# [11] "Treatment"            "Duration"             "Sex"                  "Age"                  "Cell Types"     
+
+# Re-order the columns by name
+seu@meta.data <- seu@meta.data[, c("Macula Densa Subtypes", "Deeper Macula Densa Subtypes", "Treatment", "Samples", "Seurat Clusters", "Percent Mitochondria", "nCount_RNA","nCount_SCT", "nFeature_RNA", "nFeature_SCT")] 
+
+colnames(seu@meta.data) # Get all column names
+
+
+head(seu$`Macula Densa Subtypes`)
+levels(seu$`Macula Densa Subtypes`)[levels(seu$`Macula Densa Subtypes`) == "type_1"] <- "Type 1"
+levels(seu$`Macula Densa Subtypes`)[levels(seu$`Macula Densa Subtypes`) == "type_2"] <- "Type 2"
+levels(seu$`Macula Densa Subtypes`)[levels(seu$`Macula Densa Subtypes`) == "type_3"] <- "Type 3"
+levels(seu$`Macula Densa Subtypes`)[levels(seu$`Macula Densa Subtypes`) == "type_4"] <- "Type 4"
+levels(seu$`Macula Densa Subtypes`)[levels(seu$`Macula Densa Subtypes`) == "type_5"] <- "Type 5"
+head(seu$`Deeper Macula Densa Subtypes`)
+levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_1a"] <- "Type 1a"
+levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_1b"] <- "Type 1b"
+levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_1c"] <- "Type 1c"
+levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_1d"] <- "Type 1d"
+levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_2a"] <- "Type 2a"
+levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_2b"] <- "Type 2b"
+levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_3a"] <- "Type 3a"
+levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_3b"] <- "Type 3b"
+levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_4"] <- "Type 4"
+levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_5"] <- "Type 5"
+
+```
+
+
+
+# Generating a Shiny Cell
+
+```{r}
+
+# Generate the shiny app
+
+library(Seurat)
+library(ShinyCell)
+
+scConf = createConfig(seu)
+makeShinyApp(seu, scConf, gene.mapping = TRUE, gex.assay = "SCT", default.gene1 = "Nos1", default.gene2 = "Egf",
+             shiny.title = "Macula Densa scRNAseq Dataset",
+             default.multigene = c("Sfrp1","S100g","Ptger3","Pappa2","Il1f6","Hspa1b","Fos","Egf","Foxq1","Cxcl10","Ifitm3")) 
+
+
+```
+
+
+```{r}
+
+save(seu, file = here("jk_code", "MD_shiny2.rds"))
+
+```
