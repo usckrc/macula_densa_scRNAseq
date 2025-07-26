@@ -48,8 +48,8 @@ if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
 if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
 
 
-# Remove corrupted installation
-remove.packages(c("RSQLite", "org.Mm.eg.db", "clusterProfiler"))
+
+
 
 # Install from scratch
 if (!require("BiocManager", quietly = TRUE))

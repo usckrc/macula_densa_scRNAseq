@@ -1,0 +1,137 @@
+---
+title: "Further QC Check Batch Effects"
+author: "jeff karnsomprot"
+date: "2025-07-26"
+output: html_document
+---
+
+# Load Packages
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("BiocManager")) {install.packages("BiocManager"); require("BiocManager")}
+if (!require("tibble")) {install.packages("tibble"); require("tibble")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")} #color
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("kableExtra")) {install.packages("kableExtra"); require("kableExtra")} # for color brewer
+if (!require("gplots")) {install.packages("gplots"); require("gplots")} # for color brewer
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("plotly")) {install.packages("plotly"); require("plotly")}
+library("EnhancedVolcano")
+
+
+
+```
+
+
+```{r}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+# Loading Dataset
+
+``` {r}
+
+load(here("jk_code", "JK_cleanMD_NEW.rds"))
+
+seu <- SO4
+
+rm(SO4)
+```
+
+
+#Subsetting and checking Batch Effect
+
+```{r}
+
+
+
+control <- subset(seu, subset = treatment == "control")
+low_salt <- subset(seu, subset = treatment == "low_salt")
+
+
+low_salt <- SCTransform(low_salt) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:30) %>%
+    FindClusters(resolution = 2) %>%
+    RunUMAP(dims = 1:30)
+
+control <- SCTransform(control) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:30) %>%
+    FindClusters(resolution = 2) %>%
+    RunUMAP(dims = 1:30)
+
+
+DimPlot(control)
+DimPlot(low_salt)
+
+
+control_markers <- FindAllMarkers(control, only.pos = TRUE, min.pct = 0.5, logfc.threshold = 0.5)
+
+control_markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1, p_val_adj < 0.05) %>%
+    slice_head(n = 3) %>%
+    ungroup() -> top3
+
+
+
+
+low_saltmarkers <- FindAllMarkers(low_salt, only.pos = TRUE, min.pct = 0.5, logfc.threshold = 0.5)
+
+low_saltmarkers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1, p_val_adj < 0.05) %>%
+    slice_head(n = 3) %>%
+    ungroup() -> top3lowsalt
+
+DoHeatmap(low_salt, features = top3lowsalt$gene) + NoLegend()
+DoHeatmap(control, features = top3$gene) + NoLegend()
+```
+
+# Subset out a doublet 
+
+```{r}
+control <- subset(control, subset = seurat_clusters != "19")
+
+seu <- merge(low_salt,y = control)
+
+```
+
+# View new clean + fixed batch effect dataset
+
+```{r}
+
+seu <- SCTransform(seu) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:20) %>%
+    FindClusters(resolution = 0.1) %>%
+    RunUMAP(dims = 1:20)
+
+DimPlot(seu)
+
+
+```
+# Save File
+
+```{r}
+
+save(seu, file = here("jk_code", "macula_densa.rds"))
+
+```
