@@ -47,7 +47,7 @@ library(UpSetR)
 
 
 ``` {r}
-load(here("jk_code", "JK_clean_MD.rds"))
+load(here("jk_code", "macula_densa_final.rds"))
 
 ```
 
@@ -71,8 +71,6 @@ library(shinyhelper)
 
 
 ################### 2. Skip if the seurat object is ready to be loaded directly. --------------------------------------------------
-
-seu <- SO4
 
 head(seu@meta.data)
 
@@ -103,16 +101,20 @@ seu@meta.data
 # Cleaning up Data
 
 ```{r}
-
+seu$SCT_snn_res.1 <- NULL
 seu$SCT_snn_res.2 <- NULL
 seu$SCT_snn_res.0.1 <- NULL
+seu$SCT_snn_res.0.7 <- NULL
 seu$orig.ident <- NULL
+seu$subclass_MD <- NULL
+seu$subclass2_MD <- NULL
+
 
 colnames(seu@meta.data)[colnames(seu@meta.data) == "seurat_clusters"] ="Seurat Clusters"
 colnames(seu@meta.data)[colnames(seu@meta.data) == "percent.mt"] ="Percent Mitochondria"
 colnames(seu@meta.data)[colnames(seu@meta.data) == "sample"] ="Samples"
-colnames(seu@meta.data)[colnames(seu@meta.data) == "subclass2_MD"] ="Macula Densa Subtypes"
-colnames(seu@meta.data)[colnames(seu@meta.data) == "subclass_MD"] ="Deeper Macula Densa Subtypes"
+colnames(seu@meta.data)[colnames(seu@meta.data) == "md_type"] ="Macula Densa Subtypes"
+colnames(seu@meta.data)[colnames(seu@meta.data) == "md_subtype"] ="Deeper Macula Densa Subtypes"
 colnames(seu@meta.data)[colnames(seu@meta.data) == "treatment"] ="Treatment"
 
 
@@ -144,10 +146,13 @@ levels(seu$`Macula Densa Subtypes`)[levels(seu$`Macula Densa Subtypes`) == "type
 levels(seu$`Macula Densa Subtypes`)[levels(seu$`Macula Densa Subtypes`) == "type_3"] <- "Type 3"
 levels(seu$`Macula Densa Subtypes`)[levels(seu$`Macula Densa Subtypes`) == "type_4"] <- "Type 4"
 head(seu$`Deeper Macula Densa Subtypes`)
-levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_1"] <- "Type 1"
+levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_1a"] <- "Type 1a"
+levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_1b"] <- "Type 1b"
+levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_1c"] <- "Type 1c"
 levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_2a"] <- "Type 2a"
 levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_2b"] <- "Type 2b"
-levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_3"] <- "Type 3"
+levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_3a"] <- "Type 3a"
+levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_3b"] <- "Type 3b"
 levels(seu$`Deeper Macula Densa Subtypes`)[levels(seu$`Deeper Macula Densa Subtypes`) == "type_4"] <- "Type 4"
 
 ```
@@ -166,7 +171,7 @@ library(ShinyCell)
 scConf = createConfig(seu)
 makeShinyApp(seu, scConf, gene.mapping = TRUE, gex.assay = "SCT", default.gene1 = "Nos1", default.gene2 = "Egf",
              shiny.title = "Macula Densa scRNAseq Dataset",
-             default.multigene = c("Sfrp1", "Pappa2", "Aard", "Umod", "Ckb", "Foxq1", "Fos", "Jun", "Socs3", "Cxcl10","Isg15")) 
+             default.multigene = c("Sfrp1", "Pappa2", "Aard", "Umod", "Ckb", "Foxq1", "Fos", "Krt7", "Socs3", "Cxcl10","Isg15")) 
 
 
 ```

@@ -514,6 +514,11 @@ type_markers <- FindAllMarkers(seu,
                           min.diff.pct = 0.05,
                           return.thresh = 0.05)
 
+type_markers <- type_markers %>%
+  filter(p_val_adj != 1) %>%
+  arrange(desc(avg_log2FC)) %>%
+  dplyr::select(gene, everything())
+
 type_markers %>%
     group_by(cluster) %>%
     dplyr::filter(avg_log2FC > 1, p_val_adj < 0.05) %>%
@@ -521,12 +526,6 @@ type_markers %>%
     ungroup() -> top3type
 
 DoHeatmap(seu, features = top3type$gene) + NoLegend()
-
-
-type_markers <- type_markers %>%
-  filter(p_val_adj != 1) %>%
-  arrange(desc(avg_log2FC)) %>%
-  dplyr::select(gene, everything())
 
 # Split by cluster (ident column)
 
@@ -629,7 +628,7 @@ type3_markers <- type_markers[type_markers$cluster == "type_3", ]
 type4_markers <- type_markers[type_markers$cluster == "type_4", ]
 
 # Creating a Pos Go and Chart using PA function
-results_type1 <- pathway_analysis(subset(type1_markers, avg_log2FC > 0.4), "type 1")
+results_type1 <- pathway_analysis(subset(type1_markers, avg_log2FC > 0.50), "type 1")
 results_type2 <- pathway_analysis(subset(type2_markers, avg_log2FC > 0.72), "type 2")
 results_type3 <- pathway_analysis(subset(type3_markers, avg_log2FC > 0), "type 3")
 results_type4 <- pathway_analysis(subset(type4_markers, avg_log2FC > 0), "type 4")
@@ -640,7 +639,9 @@ results_type4 <- pathway_analysis(subset(type4_markers, avg_log2FC > 0), "type 4
 #### Type 1
 
 ```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
 results_type1
+
 ```
 
 #### Type 2
