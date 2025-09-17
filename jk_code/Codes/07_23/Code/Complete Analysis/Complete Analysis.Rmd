@@ -1,0 +1,941 @@
+---
+title: "Macula Densa Analysis"
+author: "jeff karnsomprot"
+date: "2025-06-05"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: journal
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+# Load Packages
+
+```{r load new packages, echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("BiocManager")) {install.packages("BiocManager"); require("BiocManager")}
+if (!require("tibble")) {install.packages("tibble"); require("tibble")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")} #color
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("kableExtra")) {install.packages("kableExtra"); require("kableExtra")} # for color brewer
+if (!require("gplots")) {install.packages("gplots"); require("gplots")} # for color brewer
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("plotly")) {install.packages("plotly"); require("plotly")}
+library("EnhancedVolcano")
+
+# Install from scratch
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("RSQLite")  # Core dependency
+BiocManager::install("org.Mm.eg.db")
+BiocManager::install("clusterProfiler")
+
+
+library(org.Mm.eg.db)
+library(clusterProfiler)
+library(AnnotationDbi)
+library(dplyr)
+library(magrittr)
+
+
+
+
+library("EnhancedVolcano")
+library(UpSetR)
+
+
+```
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+
+## Load Dataset
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+load(here("jk_code", "macula_densa.rds"))
+
+
+```
+
+```{r error=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+
+# high res clustering
+
+seu <- SCTransform(seu) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:20) %>%
+    FindClusters(resolution = 2) %>%
+    RunUMAP(dims = 1:20)
+
+DimPlot(seu)
+
+```
+
+```{r error=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+
+markers.to.plot1 <- c("Lrp2",         # PT
+                      "Slc5a12",      # PT-S1
+                      "Slc13a3",      # PT-S2
+                      "Slc16a9",      # PT-S3
+                      "Havcr1",       # Injured PT
+                      "Epha7",        # dTL
+                      "Cryab",        # dTL
+                      "Cdh13",        # dTL1
+                      "Slc14a2",      # dTL2
+                      "Slc12a1",      # TAL
+                      "Umod",         # TAL, DCT1
+                      "Egf",          # TAL, DCT1,
+                      "Cldn10",       # TAL
+                      "Cldn16",       # TAL
+                      "Nos1",         # MD
+                      "Slc12a3",      # DCT
+                      "Pvalb",        # DCT1
+                      "Slc8a1",       # DCT2, CNT
+                      "Aqp2",         # PC
+                      "Slc4a1",       # IC-A
+                      "Slc26a4",      # IC-B
+                      "Nphs1",        # Podo
+                      "Ncam1",        # PEC
+                      "Flt1",         # Endo
+                      "Emcn",         # Glom Endo
+                      "Kdr",          # Capillary Endo
+                      "Pdgfrb",       # Perivascular
+                      "Pdgfra",       # Fib
+                      "Piezo2",       # Mesangial
+                      "Acta2",        # Mural
+                      "Ptprc",        # Immune
+                      "Cd74",         # Macrophage
+                      "Skap1",        # B/T Cells 
+                      "Upk1b",        # Uro
+                      "Top2a"         # Proliferation
+)
+
+DotPlot(seu,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+```
+
+```{r error=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+
+all_markers <- FindAllMarkers(seu, only.pos = TRUE, min.pct = 0.5, logfc.threshold = 0.5)
+
+all_markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1, p_val_adj < 0.05) %>%
+    slice_head(n = 3) %>%
+    ungroup() -> top3
+
+DoHeatmap(seu, features = top3$gene) + NoLegend()
+
+seu <- subset(seu, subset = seurat_clusters != "24")
+
+```
+
+# Final UMAP
+
+UMAP plot summarizing the final clustering analysis of the dataset. Clusters were identified using the top 15 principal components and resolution 1 following SCTransform normalization. The UMAP visualization displays the separation of distinct cell populations.
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+seu <- SCTransform(seu) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:15) %>%
+    FindClusters(resolution = 1) %>%
+    RunUMAP(dims = 1:15)
+
+DimPlot(seu)
+
+
+```
+
+## Confirmation of Macula Densa Markers
+
+Every cluster here represents the macula densa<br> Markers are from a known list used to identify **kidney cell types**<br>
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+DotPlot(seu,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+```
+
+# FindMarkers of Clusters
+
+Cluster markers were identified for each group to characterize cellular diversity within the dataset.The accompanying heatmap highlights the top three genes per cluster, ranked by average log2 fold change **(avg_log2FC)** and filtered for statistical significance **(p_val \<0.05)**. This analysis revealed expression patterns, such as distinct Egf and Umod expression in select clusters and very mild differential expression among the first five clusters, supporting the classification of macula densa subtypes. Additionally, selected genes—including **Ptger3, Pappa2, Egf, Foxq1, Fos, Egr1, and Cxcl10**—were visualized to further illustrate key differences and marker distributions across clusters.<br>
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+
+
+all_markers <- FindAllMarkers(seu, only.pos = TRUE, min.pct = 0.5, logfc.threshold = 0.5)
+
+all_markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 0.5, p_val_adj < 0.05) %>%
+    slice_head(n = 3) %>%
+    ungroup() -> top3
+
+DoHeatmap(seu, features = top3$gene) + NoLegend()
+
+markers.to.plot3 <- c("Ptger3","Pappa2","Egf","Foxq1","Fos","Egr1","Cxcl10")
+
+
+```
+
+## Grouping into Macula Densa subtypes
+
+The seurat cluster order was changed to visually show similarities between clusters on a multidimensional dotplot<br>
+
+The Dotplot shows 4 patterns in macula densa. There were clusters highly expressing Pappa2,Egf,Fos,and Cxcl10. These became the hallmark markers for identifying my macula densa types. Within each type identification besides Cxcl10, Theres unique expressions of a few specific genes. <br>
+
+Type 1 Clusters are a bit difficult but some markers that could help identify are Ptger3 and Pappa2.
+
+Type 2 Expresses high Egf, with its subcluster expressing high Foxq1 (there are more but this is an example) <br>
+
+Type 3 Expresses high in Fos, it's subcluster shows high expression of Egr1. <br>
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+seu@meta.data$seurat_clusters <- 
+  factor(
+    seu@meta.data$seurat_clusters, 
+    levels = c(0, 3, 1, 2, 4, 7, 12, 13,5,9, 6, 16, 10, 8, 11, 14, 15)
+  )
+
+
+
+Idents(seu) <- "seurat_clusters"
+
+DotPlot(seu,
+features = markers.to.plot3,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+
+
+seu@meta.data <- seu@meta.data %>%
+  mutate(
+    md_subtype = dplyr::case_when(
+      seurat_clusters %in% c(0,3) ~ "type_1a",
+      seurat_clusters %in% c(7) ~ "type_1b",
+      seurat_clusters %in% c(1,2,4,12,13,5) ~ "type_1c",
+     seurat_clusters %in% c(9,6,16,10) ~ "type_2a",
+     seurat_clusters %in% c(8) ~ "type_2b",
+      seurat_clusters %in% c(11) ~ "type_3a",
+      seurat_clusters %in% c(14) ~ "type_3b",
+      seurat_clusters == 15 ~ "type_4"
+    )
+  )
+
+
+DimPlot(object = seu, reduction = "umap", group.by = "md_subtype", label = TRUE)
+
+```
+
+## Grouping into Macula Densa Types
+
+UMAP visualization showing the macula densa cell populations grouped into four major types, based on re-annotation using aggregated md_subtype classifications. Cells originally overclustered into subtypes (e.g., type_1a, type_1b, type_1c) were merged into broader macula densa types (type_1 through type_4) according to shared DEG markers. <br>
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+
+
+seu@meta.data <- seu@meta.data %>%
+  mutate(
+    md_type = case_when(
+      md_subtype %in% c("type_1a", "type_1b", "type_1c") ~ "type_1",
+      md_subtype %in% c("type_2a", "type_2b") ~ "type_2",
+      md_subtype %in% c("type_3a", "type_3b") ~ "type_3",
+      md_subtype == "type_4" ~ "type_4",
+    )
+  )
+
+
+DimPlot(object = seu, reduction = "umap", group.by = "md_type", label = TRUE)
+
+
+```
+
+## FeaturePlot of Types
+
+This shows our four distinct clusters
+
+```{r distinct clusters, echo=TRUE, message=FALSE, warning=FALSE}
+
+FeaturePlot(seu,c("Pappa2","Egf","Foxq1","Fos","Egr1","Cxcl10"))
+
+
+```
+
+## DotPlots for Type Visualization
+
+Diagonal Dotplot of Macula Densa Subtype Markers (more specific)
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+seu@meta.data$md_subtype <- 
+  factor(seu@meta.data$md_subtype, 
+         levels = c("type_1a","type_1b","type_1c","type_2a","type_2b", "type_3a", "type_3b", "type_4"))
+
+
+Idents(seu) <- "md_subtype"
+
+DotPlot(seu,
+features = markers.to.plot3,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+```
+
+Diagonal Dotplot of Macula Densa Type Markers
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+Idents(seu) <- "md_type"
+
+
+markers.to.plot4 <- c("Pappa2","Robo2","Egf","Umod","Jun","Fos","Cxcl10","Isg15")
+
+DotPlot(seu,
+features = markers.to.plot4,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+
+
+```
+
+# Excel Files
+
+[Google Drive Link](https://drive.google.com/drive/folders/1MDM-2mrgKV-secvYZuR6sGxDtw-gPgJl?usp=sharing) (Contains Excel Files)
+
+## Markers by Cluster
+
+Some clusters reveal rare but biologically informative distinctions, which can highlight subtle cell states or activation.<br> For example, S100g is a marker highly expressed specifically in **cluster 12**, but it exhibits strong sample-specific variation, notably being much higher in **sample SO4** compared to other samples.<br> This pattern suggests that while S100g is a useful marker for identifying this cluster, its expression may be influenced by batch effects or sample-specific conditions and should be interpreted with caution.<br>
+
+```{r}
+
+VlnPlot(seu,"S100g",group.by = "treatment",split.by = "sample")
+
+```
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+Idents(seu) <- "seurat_clusters"
+
+DoHeatmap(seu, features = top3$gene) + NoLegend()
+
+all_markers <- all_markers %>%
+  filter(p_val_adj != 1) %>%
+  arrange(desc(avg_log2FC)) %>%
+  dplyr::select(gene, everything())
+
+# Split by cluster (ident column)
+
+marker_list <- split(all_markers, all_markers$cluster)
+
+ 
+
+# Sort names alphanumerically
+
+sorted_cluster_names <- names(marker_list)[order(as.numeric(names(marker_list)))]
+
+ 
+
+# Create a workbook
+
+wb <- createWorkbook()
+
+ 
+
+# Add each cluster as a new worksheet
+
+for (cluster_name in sorted_cluster_names) {
+
+  addWorksheet(wb, sheetName = cluster_name)
+
+  writeData(wb, sheet = cluster_name, marker_list[[cluster_name]])
+
+}
+
+ 
+
+date <- format(Sys.Date(), "%Y%m%d")
+
+ 
+
+# Save workbook
+
+saveWorkbook(wb, here("jk_code", paste0(date, "_", "_SO4_FindAllMarkers_By_Cluster.xlsx")), overwrite = TRUE)
+
+```
+
+## Markers by Subtype
+
+Marker genes defined by subtypes tend to be more robust and consistent, reliably distinguishing functional or transcriptional subpopulations within the macula densa.<br>
+
+These subtype markers are less likely to be confounded by technical artifacts and better represent genuine biological variation related to cell states or functions.<br>
+
+These subtypes are consistent with changes in principal components.<br>
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+Idents(seu) <- "md_subtype"
+
+subtype_markers <- FindAllMarkers(seu, 
+                          only.pos = TRUE,
+                          logfc.threshold = 0.1,
+                          min.pct = 0.1,
+                          min.diff.pct = 0.05,
+                          return.thresh = 0.05)
+
+subtype_markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1, p_val_adj < 0.05) %>%
+    slice_head(n = 3) %>%
+    ungroup() -> top3subtype
+
+DoHeatmap(seu, features = top3subtype$gene) + NoLegend()
+
+# Removing  insignificant genes
+subtype_markers <- subtype_markers %>%
+  filter(p_val_adj != 1) %>%
+  arrange(desc(avg_log2FC)) %>%
+  dplyr::select(gene, everything())
+
+# Split by cluster (ident column)
+
+marker_list <- split(subtype_markers, subtype_markers$cluster)
+
+ 
+# Sort names alphanumerically
+
+sorted_cluster_names <- names(marker_list)[order(as.numeric(names(marker_list)))]
+
+
+# Create a workbook
+
+wb <- createWorkbook()
+
+ 
+
+# Add each cluster as a new worksheet
+
+for (cluster_name in sorted_cluster_names) {
+
+  addWorksheet(wb, sheetName = cluster_name)
+
+  writeData(wb, sheet = cluster_name, marker_list[[cluster_name]])
+
+}
+
+date <- format(Sys.Date(), "%Y%m%d")
+
+
+# Save workbook
+
+saveWorkbook(wb, here("jk_code", paste0(date, "_", "_SO4_FindAllMarkers_By_Subtype.xlsx")), overwrite = TRUE)
+
+```
+
+## Markers by MD Type
+
+At the broader MD type level, certain markers allow clear differentiation between major macula densa subtypes.<br>
+
+These general markers serve as reliable signatures to classify each MD type, providing consistent identification of the main macula densa categories in this dataset.<br>
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+
+Idents(seu) <- "md_type"
+
+type_markers <- FindAllMarkers(seu, 
+                          only.pos = TRUE,
+                          logfc.threshold = 0.1,
+                          min.pct = 0.1,
+                          min.diff.pct = 0.05,
+                          return.thresh = 0.05)
+
+type_markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1, p_val_adj < 0.05) %>%
+    slice_head(n = 3) %>%
+    ungroup() -> top3type
+
+DoHeatmap(seu, features = top3type$gene) + NoLegend()
+
+
+type_markers <- type_markers %>%
+  filter(p_val_adj != 1) %>%
+  arrange(desc(avg_log2FC)) %>%
+  dplyr::select(gene, everything())
+
+# Split by cluster (ident column)
+
+marker_list <- split(type_markers, type_markers$cluster)
+
+ 
+# Sort names alphanumerically
+
+sorted_cluster_names <- names(marker_list)[order(as.numeric(names(marker_list)))]
+
+
+# Create a workbook
+
+wb <- createWorkbook()
+
+ 
+
+# Add each cluster as a new worksheet
+
+for (cluster_name in sorted_cluster_names) {
+
+  addWorksheet(wb, sheetName = cluster_name)
+
+  writeData(wb, sheet = cluster_name, marker_list[[cluster_name]])
+
+}
+
+date <- format(Sys.Date(), "%Y%m%d")
+
+
+# Save workbook
+
+saveWorkbook(wb, here("jk_code", paste0(date, "_", "_SO4_FindAllMarkers_By_MDtype.xlsx")), overwrite = TRUE)
+
+
+```
+
+# Pathway Analysis
+
+Link Includes the Marker DEGs as well as the Gene Ontology of each Macula Densa Type and Subtype. <br>
+
+[Google Drive Link](https://drive.google.com/drive/folders/1MDM-2mrgKV-secvYZuR6sGxDtw-gPgJl?usp=sharing) (Contains Excel Files)
+
+## Creating Pathway Function
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+#  Filter Before Independently before you Run this
+
+# Creating a function to Repeat Easily
+
+pathway_analysis <- function(type_markers, type_name)
+  {
+  # Arrange markers by log2 fold change
+  df2 <- type_markers %>% arrange(desc(avg_log2FC))
+  DEG_list <- df2
+  
+  markers <- DEG_list %>% mutate(SYMBOL = gene)
+
+
+ENTREZ_list <- bitr(
+  geneID = DEG_list$gene,
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+  markers <- ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
+  
+  # Upregulated Pathway Code
+  pos_markers_up <- markers %>% dplyr::filter(avg_log2FC > 0) %>% arrange(desc(abs(avg_log2FC)))
+  pos_ranks_up <- pos_markers_up$ENTREZID[abs(pos_markers_up$avg_log2FC) > 0]
+  pos_go_up <- enrichGO(gene = pos_ranks_up, OrgDb = "org.Mm.eg.db", ont = "BP", readable = TRUE)
+  chart_up <- dotplot(pos_go_up) +
+    ggtitle(paste(type_name, "Functions")) +
+    theme_classic() +
+    theme(
+      plot.title = element_text(hjust = 0.5),
+      legend.position = "left",
+      axis.text.y = element_text(hjust = 0, size = 10)
+    ) +
+    scale_y_discrete(position = "right", labels = function(x) str_wrap(x, width = 25))
+  
+
+  return(list(
+    chart_up = chart_up,
+    pos_go_up = pos_go_up
+  ))
+}
+
+```
+
+## Pathways for Each MD Type
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+# Creating List of Marker genes to do Pathway Analysis
+type1_markers <- type_markers[type_markers$cluster == "type_1", ]
+type2_markers <- type_markers[type_markers$cluster == "type_2", ]
+type3_markers <- type_markers[type_markers$cluster == "type_3", ]
+type4_markers <- type_markers[type_markers$cluster == "type_4", ]
+
+# Creating a Pos Go and Chart using PA function
+results_type1 <- pathway_analysis(subset(type1_markers, avg_log2FC > 0.4), "type 1")
+results_type2 <- pathway_analysis(subset(type2_markers, avg_log2FC > 0.72), "type 2")
+results_type3 <- pathway_analysis(subset(type3_markers, avg_log2FC > 0), "type 3")
+results_type4 <- pathway_analysis(subset(type4_markers, avg_log2FC > 0), "type 4")
+
+
+```
+
+#### Type 1
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+results_type1
+```
+
+#### Type 2
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+results_type2
+```
+
+#### Type 3
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+results_type3
+```
+
+#### Type 4
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+results_type4
+```
+
+### Saving Excel File
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+pathway_list <- list(
+  "type 1" = results_type1$pos_go_up@result,
+  "type 2" = results_type2$pos_go_up@result,
+  "type 3" = results_type3$pos_go_up@result,
+  "type 4" = results_type4$pos_go_up@result
+)
+
+
+wb <- createWorkbook()
+
+
+for (sheet_name in names(pathway_list)) {
+  addWorksheet(wb, sheet_name)
+  writeData(wb, sheet_name, pathway_list[[sheet_name]])
+}
+
+# Save the workbook
+saveWorkbook(wb, here("jk_code", "md_type_pathways_DEGS.xlsx"), overwrite = TRUE)
+
+```
+
+## Pathway for each MD subtype
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+# Subset markers by subtype
+subtype1a_markers <- subset(subtype_markers, cluster == "type_1a")
+subtype1b_markers <- subset(subtype_markers, cluster == "type_1b")
+subtype1c_markers <- subset(subtype_markers, cluster == "type_1c")
+subtype2a_markers <- subset(subtype_markers, cluster == "type_2a")
+subtype2b_markers <- subset(subtype_markers, cluster == "type_2b")
+subtype3a_markers <- subset(subtype_markers, cluster == "type_3a")
+subtype3b_markers <- subset(subtype_markers, cluster == "type_3b")
+
+# Run pathway analysis for each subtype (adjust thresholds as appropriate)
+results_type1a <- pathway_analysis(subset(subtype1a_markers, avg_log2FC > 0.5), "type 1a")
+results_type1b <- pathway_analysis(subset(subtype1b_markers, avg_log2FC > 0.6), "type 1b")
+results_type1c <- pathway_analysis(subset(subtype1c_markers, avg_log2FC > 0), "type 1c")
+results_type2a <- pathway_analysis(subset(subtype2a_markers, avg_log2FC > 1), "type 2a")
+results_type2b <- pathway_analysis(subset(subtype2b_markers, avg_log2FC > 2), "type 2b")
+results_type3a <- pathway_analysis(subset(subtype3a_markers, avg_log2FC > 0),   "type 3a")
+results_type3b <- pathway_analysis(subset(subtype3b_markers, avg_log2FC > 0),   "type 3b")
+
+
+```
+
+#### Type 1a
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+results_type1a
+
+```
+
+#### Type 1b
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+results_type1b
+
+```
+
+#### Type 1c
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+results_type1c
+
+```
+
+#### Type 2a
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+results_type2a
+
+```
+
+#### Type 2b
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+results_type2b
+
+```
+
+#### Type 3a
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+results_type3a
+
+```
+
+#### Type 3b
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+results_type3b
+
+```
+
+### Saving Excel File for Subtype Pathways
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=TRUE}
+
+# Create a named list for all subtypes results
+pathway_list_subtypes <- list(
+  "type 1a" = results_type1a$pos_go_up@result,
+  "type 1b" = results_type1b$pos_go_up@result,
+  "type 1c" = results_type1c$pos_go_up@result,
+  "type 2a" = results_type2a$pos_go_up@result,
+  "type 2b" = results_type2b$pos_go_up@result,
+  "type 3a" = results_type3a$pos_go_up@result,
+  "type 3b" = results_type3b$pos_go_up@result,
+  "type 4"  = results_type4$pos_go_up@result
+)
+
+# Create an Excel workbook
+wb_subtypes <- createWorkbook()
+
+# Add one worksheet per subtype and write corresponding data
+for (sheet_name in names(pathway_list_subtypes)) {
+  addWorksheet(wb_subtypes, sheet_name)
+  writeData(wb_subtypes, sheet_name, pathway_list_subtypes[[sheet_name]])
+}
+
+# Save the workbook (adjust the filename/path as needed)
+saveWorkbook(wb_subtypes, here("jk_code", "md_subtype_pathways_DEGS.xlsx"), overwrite = TRUE)
+
+
+```
+
+Assign your markers as a vector genes_to_plot \<- c( "Fos", "Socs3", "Gadd45b", "Wee1", "Hspa1a", "Sat1", "Cxcl12", "Itpr2", "Bmp4", "Casr", "Grin2c", "Irx3", "Rap1gap", "App", "Wwc1", "Syt5", "Syn3", "Cacna1d", "Slc6a7", "Robo2", "Begain", "Pappa1", "Nos1", "Ptgs2", "Bmp2", "Atp2a3"
+
+# Comparison to Article + Database
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=TRUE}
+
+
+partekflow<- c(
+  "Fos", "Socs3", "Gadd45b", "Wee1", "Hspa1a", "Sat1", # type 3
+  "Cxcl12", "Itpr2", "Bmp4", "Casr", "Grin2c", "Irx3", "Rap1gap", "App", "Wwc1", # type 2
+  "Syt5", "Syn3", "Cacna1d", "Slc6a7", "Robo2", "Begain", # type 1
+  "Pappa1", "Nos1", "Ptgs2", "Bmp2", "Atp2a3" #possible type 1 subclusters
+)
+
+# Figure C Gene Groups
+figure_c <- c(
+  # MD3
+  "Fabp3", "Egf", "Ccn1", "Foxq1", "Cxcl12",
+  # MD5
+  "Vash2", "Pamr1", "Vegfa", "Ccn3",
+  # MD_ALL
+  "Bmp3", "Fgf9", "Spp1", "Wnt10a", "Sfrp1", "Tcf4"
+)
+
+Idents(seu) <- "md_type"
+
+DotPlot(seu,
+features = figure_c,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+DotPlot(seu,
+features = partekflow,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+```
+
+FeaturePlots
+
+## Figure C
+
+These are the genes plotted on figure C on the article
+
+![Figure C](images/Screenshot 2025-07-26 at 5.29.02 AM.png){width="504"}
+
+### MD 3 
+
+Each gene seems to be consistent with this macula dataset except Ccn1 <br>
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=TRUE}
+
+# 2. FeaturePlot for MD3 genes (from figure_c)
+FeaturePlot(seu, features = c("Fabp3", "Egf", "Ccn1", "Foxq1", "Cxcl12"), ncol = 3)
+VlnPlot(seu, features = c("Fabp3", "Egf", "Ccn1", "Foxq1", "Cxcl12"), ncol = 3)
+
+```
+
+### MD 5 
+
+MD 5 genes shown in this dataset <br>
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=TRUE}
+# 3. FeaturePlot for MD5 genes (from figure_c)
+FeaturePlot(seu, features = c("Vash2", "Pamr1", "Vegfa", "Ccn3"), ncol = 2)
+VlnPlot(seu, features = c("Vash2", "Pamr1", "Vegfa", "Ccn3"), ncol = 2)
+
+```
+
+### MD ALL
+
+All of these genes are enriched in every cluster <br>
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=TRUE}
+
+# 4. FeaturePlot for MD_ALL genes (from figure_c)
+FeaturePlot(seu, features = c("Bmp3", "Fgf9", "Spp1", "Wnt10a", "Sfrp1", "Tcf4"), ncol = 3) 
+VlnPlot(seu, features = c("Bmp3", "Fgf9", "Spp1", "Wnt10a", "Sfrp1", "Tcf4"), ncol = 3) 
+```
+
+
+## PartekFlow
+
+### Type 3 Markers
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=TRUE}
+
+# Type 3 genes
+FeaturePlot(seu, features = c("Fos", "Socs3", "Gadd45b", "Wee1", "Hspa1a", "Sat1"), ncol = 3)
+VlnPlot(seu, features = c("Fos", "Socs3", "Gadd45b", "Wee1", "Hspa1a", "Sat1"), ncol = 3)
+
+```
+
+### Type 2 Markers
+
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=TRUE}
+# Type 2 genes
+FeaturePlot(seu, features = c("Cxcl12", "Itpr2", "Bmp4", "Casr", "Grin2c", "Irx3", "Rap1gap", "App", "Wwc1"), ncol = 3)
+
+VlnPlot(seu, features = c("Cxcl12", "Itpr2", "Bmp4", "Casr", "Grin2c", "Irx3", "Rap1gap", "App", "Wwc1"), ncol = 3)
+
+
+```
+
+### Type 1 Markers
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=TRUE}
+# Type 1 genes
+FeaturePlot(seu, features = c("Syt5", "Syn3", "Cacna1d", "Slc6a7", "Robo2", "Begain"), ncol = 3)
+VlnPlot(seu, features = c("Syt5", "Syn3", "Cacna1d", "Slc6a7", "Robo2", "Begain"), ncol = 3)
+```
+
+### Type 1 Subcluster Possibility?
+
+```{r echo=FALSE, error=FALSE, message=FALSE, warning=TRUE}
+# Type 1 subclusters
+FeaturePlot(seu, features = c("Pappa1", "Nos1", "Ptgs2", "Bmp2", "Atp2a3"), ncol = 3)
+
+VlnPlot(seu, features = c("Pappa1", "Nos1", "Ptgs2", "Bmp2", "Atp2a3"),group.by = "md_subtype")
+```
+
+# Save Annotated Seurat Object For ShinyCell
+
+```{r echo=TRUE, error=FALSE, message=FALSE, warning=FALSE}
+
+save(seu, file = here("jk_code", "macula_densa_final.rds"))
+
+```

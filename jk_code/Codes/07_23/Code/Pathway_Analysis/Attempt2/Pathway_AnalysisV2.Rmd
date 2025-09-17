@@ -1,0 +1,544 @@
+---
+title: "Pathway_Analysis (4 Types)"
+author: "jeff karnsomprot"
+date: "2025-07-08"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: journal
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+# Loading in Data sets + Library packages.
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!requireNamespace('BiocManager', quietly = TRUE)) {install.packages('BiocManager'); require("BiocManager")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("sctransform")) {install.packages("sctransform"); require("sctransform")}
+if (!require("glmGamPoi")) {BiocManager::install('glmGamPoi'); require("glmGamPoi")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("EnhancedVolcano")) {BiocManager::install('EnhancedVolcano'); require("EnhancedVolcano")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("gghighlight")) {install.packages("gghighlight"); require("gghighlight")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("gplots")) {install.packages("gplots"); require("gplots")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+
+
+
+
+
+# Install from scratch
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("RSQLite")  # Core dependency
+BiocManager::install("org.Mm.eg.db")
+BiocManager::install("clusterProfiler")
+
+
+# CRAN packages
+install.packages(c("dplyr", "magrittr"))
+library(org.Mm.eg.db)
+library(clusterProfiler)
+library(AnnotationDbi)
+library(dplyr)
+library(magrittr)
+
+
+
+
+library("EnhancedVolcano")
+library(UpSetR)
+
+```
+
+
+```{r}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+
+```{r}
+
+load(here("jk_code", "JK_clean_MD_2.rds"))
+```
+
+
+# Top genes
+
+```{r}
+
+Idents(SO4) <- "supergroup"
+
+type_markers <- FindAllMarkers(SO4, 
+                          only.pos = TRUE,
+                          logfc.threshold = 0.1,
+                          min.pct = 0.1,
+                          min.diff.pct = 0.05,
+                          return.thresh = 0.05)
+
+
+type_markers <- type_markers[
+  !grepl("^(mt-|Rp|Gm)|Rik$", rownames(type_markers)),
+  ,
+  drop = FALSE
+]
+
+```
+
+
+```{r}
+
+type_1_markers <- type_markers[type_markers$cluster == "type_1", ]
+type_2_markers <- type_markers[type_markers$cluster == "type_2", ]
+type_3_markers <- type_markers[type_markers$cluster == "type_3", ]
+type_4_markers <- type_markers[type_markers$cluster == "type_4", ]
+type_5_markers <- type_markers[type_markers$cluster == "type_5", ]
+type_6_markers <- type_markers[type_markers$cluster == "type_6", ]
+
+```
+
+
+## Type 1 
+
+```{r}
+
+df<- type_1_markers %>% arrange(desc(avg_log2FC))
+
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+
+DEG_list <- df2
+
+markers1 <- DEG_list %>% mutate(SYMBOL = gene)
+
+
+ENTREZ_list <- bitr(
+  geneID = DEG_list$gene,
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+
+markers1 <-  ENTREZ_list %>% inner_join(markers1, by = "SYMBOL")
+
+# Removing genes that are not statistically significant. 
+markers1 <-  markers1 %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers1 <-  markers1 %>% dplyr::filter(avg_log2FC > 0.4) %>% arrange(desc(abs(avg_log2FC))) 
+#head(pos.markers, n = 50)
+
+pos.ranks1 <- pos.markers1$ENTREZID[abs(pos.markers1$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go1 <- enrichGO(gene = pos.ranks1,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go1
+
+ chart1 <- dotplot(pos_go1) +
+    ggtitle("type 1") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 lines
+ 
+ chart1
+```
+
+
+### Viewing genes Type 1
+
+```{r}
+
+VlnPlot(SO4, c("Pappa2","Ramp3","Itga4"))
+
+#filtered_genes <- markers[abs(markers$pct.1 - markers$pct.2) > 0.3, ]
+```
+
+## Type 2
+
+```{r}
+
+df<- type_2_markers %>% arrange(desc(avg_log2FC))
+
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+
+DEG_list <- df2
+
+markers2 <- DEG_list %>% mutate(SYMBOL = gene)
+
+
+ENTREZ_list <- bitr(
+  geneID = DEG_list$gene,
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+
+markers2 <-  ENTREZ_list %>% inner_join(markers2, by = "SYMBOL")
+
+# Removing genes that are not statistically significant. 
+markers2 <-  markers2 %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers2 <-  markers2 %>% dplyr::filter(avg_log2FC > 0.9) %>%  arrange(desc(abs(avg_log2FC)))
+#head(pos.markers, n = 50)
+
+pos.ranks2 <- pos.markers2$ENTREZID[abs(pos.markers2$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go2 <- enrichGO(gene = pos.ranks2,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go2
+
+chart2 <- dotplot(pos_go2) +
+    ggtitle("type 2") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 li
+chart2
+ 
+```
+
+### Type 2 Gene View
+
+```{r}
+
+VlnPlot(SO4, features = c("Egf","Umod","Cldn19","Foxq1","Cxcl12"))
+
+
+```
+
+## Type 3 
+
+```{r}
+
+
+df<- type_3_markers %>% arrange(desc(avg_log2FC))
+
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+
+DEG_list <- df2
+
+markers3 <- DEG_list %>% mutate(SYMBOL = gene)
+
+
+ENTREZ_list <- bitr(
+  geneID = DEG_list$gene,
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+markers3 <-  ENTREZ_list %>% inner_join(markers3, by = "SYMBOL")
+
+# Removing genes that are not statistically significant. 
+markers3 <-  markers3 %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers3 <-  markers3 %>% dplyr::filter(avg_log2FC > 0.8) %>%  arrange(desc(abs(avg_log2FC)))
+#head(pos.markers, n = 50)
+
+pos.ranks3 <- pos.markers3$ENTREZID[abs(pos.markers3$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go3 <- enrichGO(gene = pos.ranks3,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go3
+
+ chart3 <- dotplot(pos_go3) +
+    ggtitle("type 3") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 li
+ 
+ chart3
+```
+
+
+### Viewing Type 3 Genes
+
+```{r}
+
+
+VlnPlot(SO4, features = c("Jun","Fos","Socs3","Hspb1","Dusp1","Trib1"))
+```
+
+
+
+## Type 4 
+
+```{r}
+
+
+df<- type_4_markers %>% arrange(desc(avg_log2FC))
+
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+
+DEG_list <- df2
+
+markers4 <- DEG_list %>% mutate(SYMBOL = gene)
+
+
+ENTREZ_list <- bitr(
+  geneID = DEG_list$gene,
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+markers4 <-  ENTREZ_list %>% inner_join(markers4, by = "SYMBOL")
+
+# Removing genes that are not statistically significant. 
+markers4 <-  markers4 %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers4 <-  markers4 %>% dplyr::filter(avg_log2FC > 0) %>%  arrange(desc(abs(avg_log2FC)))
+#head(pos.markers, n = 50)
+
+pos.ranks4 <- pos.markers4$ENTREZID[abs(pos.markers4$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go4 <- enrichGO(gene = pos.ranks4,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go4
+
+ chart4 <- dotplot(pos_go4) +
+    ggtitle("type 4") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 li
+ 
+ chart4
+```
+
+### View Type 4 Genes
+
+```{r}
+
+
+VlnPlot(SO4, features = c("Cxcl10","Isg15","Ifit1"))
+
+```
+
+## Type 5
+
+```{r}
+
+
+df<- type_5_markers %>% arrange(desc(avg_log2FC))
+
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+
+DEG_list <- df2
+
+DEG_list$gene[DEG_list$gene == "Il1f6"] <- "Il36a"
+
+markers5 <- DEG_list %>% mutate(SYMBOL = gene)
+
+
+ENTREZ_list <- bitr(
+  geneID = DEG_list$gene,
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+
+
+markers5 <-  ENTREZ_list %>% inner_join(markers5, by = "SYMBOL")
+
+# Removing genes that are not statistically significant. 
+markers5 <-  markers5 %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers5 <-  markers5 %>% dplyr::filter(avg_log2FC > 0) %>%  arrange(desc(abs(avg_log2FC)))
+#head(pos.markers, n = 50)
+
+pos.ranks5 <- pos.markers5$ENTREZID[abs(pos.markers5$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go5 <- enrichGO(gene = pos.ranks5,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go5
+
+ chart5 <- dotplot(pos_go5) +
+    ggtitle("type 5") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 li
+ 
+ chart5
+```
+## Type 6
+
+```{r}
+
+
+df<- type_6_markers %>% arrange(desc(avg_log2FC))
+
+
+df2 <- df %>% filter(p_val_adj < 0.05)
+
+
+DEG_list <- df2
+
+DEG_list$gene[DEG_list$gene == "Il1f6"] <- "Il36a"
+
+markers6 <- DEG_list %>% mutate(SYMBOL = gene)
+
+
+ENTREZ_list <- bitr(
+  geneID = DEG_list$gene,
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+
+markers6 <-  ENTREZ_list %>% inner_join(markers6, by = "SYMBOL")
+
+# Removing genes that are not statistically significant. 
+markers6 <-  markers6 %>% dplyr::filter(p_val_adj < 0.05)
+#head(markers, n = 50)
+
+pos.markers6 <-  markers6 %>% dplyr::filter(avg_log2FC > 0) %>%  arrange(desc(abs(avg_log2FC)))
+#head(pos.markers, n = 50)
+
+pos.ranks6 <- pos.markers6$ENTREZID[abs(pos.markers6$avg_log2FC) > 0]
+#head(pos.ranks)
+
+pos_go6 <- enrichGO(gene = pos.ranks6,           #a vector of entrez gene id
+                   OrgDb = "org.Mm.eg.db",    
+                   ont = "BP",
+                   readable = TRUE)              #whether mapping gene ID to gene Name
+
+pos_go6
+
+ chart6 <- dotplot(pos_go6) +
+    ggtitle("type 6") +
+    theme_classic() + 
+    theme(
+        plot.title = element_text(hjust = 0.5),
+        legend.position = "left",
+        axis.text.y = element_text(hjust = 0, size = 10)) +
+    scale_y_discrete(position = "right", 
+                     labels = function(x) str_wrap(x, width = 25))  # Wrap y-axis labels to 2 li
+ 
+ chart6
+ 
+```
+
+
+
+
+# All 4 pathways next to eachother
+
+```{r}
+
+chart1
+chart2
+chart3
+chart4
+chart5
+chart6
+```
+
+
+# Saving Excel File
+
+```{r}
+
+
+pathway_list <- list(
+  "type 1" = pos_go1@result,
+  "type 2" = pos_go2@result,
+  "type 3" = pos_go3@result,
+  "type 4" = pos_go4@result,
+  "type 5" = pos_go4@result,
+  "type 6" = pos_go4@result
+)
+
+
+wb <- createWorkbook()
+
+
+for (sheet_name in names(pathway_list)) {
+  addWorksheet(wb, sheet_name)
+  writeData(wb, sheet_name, pathway_list[[sheet_name]])
+}
+
+# Save the workbook
+saveWorkbook(wb, here("jk_code", "supergroup_MD_DEGs.xlsx"), overwrite = TRUE)
+
+```
+

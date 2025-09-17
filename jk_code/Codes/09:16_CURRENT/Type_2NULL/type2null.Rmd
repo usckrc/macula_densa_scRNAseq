@@ -1,0 +1,426 @@
+---
+title: "Type2NULL"
+author: "jeff karnsomprot"
+date: "2025-09-10"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: journal
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+# Introduction
+
+We have one major question regarding data analysis. Specifically, would the data (e.g. the number of clusters) look different if you were to totally exclude "type 2" MD cells? Clearly, these are intermediate cTAL cells probably at the edge of the MD plaque, but definitely not true MD cells.  Top markers for type 2 are Egf, Umod, Cldn19 which are known cTAL markers that are known to be NOT expressed in MD cells.
+
+Question : Would the data look different if I exclude "type 2" MD Cells.
+
+"Type 2" MD Cells are intermediate cTal cells that are usually at the edge of the MD plaque. They aren't TRUE MD Cells. <br>
+Identifying these intermediate cTal cells could be done by using markers such as **Egf, Umod, Cldn19** <br>
+These markers are known to not be expressed in Macula Densa Cells<br>
+
+## Version 1
+
+Remove cells labeled "type 2" from the data set. 
+
+
+## Version 2 
+
+Remove cells that have expression of *Umod > 0* , *Egf > 0*
+
+# Loading Required Data/Packages
+
+## Loading Packages
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("BiocManager")) {install.packages("BiocManager"); require("BiocManager")}
+if (!require("tibble")) {install.packages("tibble"); require("tibble")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")} #color
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("kableExtra")) {install.packages("kableExtra"); require("kableExtra")} # for color brewer
+if (!require("gplots")) {install.packages("gplots"); require("gplots")} # for color brewer
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("plotly")) {install.packages("plotly"); require("plotly")}
+library("EnhancedVolcano")
+
+
+
+```
+
+## Loading Dataset
+
+```{r include=FALSE}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+JK_clean_MD.rds = Quality Controlled for Batch Effects / Bad Quality cells.
+
+``` {r}
+
+load(here("jk_code", "JK_clean_MD.rds"))
+
+SO <- SO4
+
+rm(SO4)
+
+```
+
+# Past Data of Macula Densa 
+
+After viewing the data Type 2 has a clear high expression of the markers compared to other clusters. 
+
+```{r}
+
+DimPlot(SO,group.by = "subclass2_MD")
+
+VlnPlot(SO,c("Egf","Umod","Cldn19"),group.by = "subclass2_MD")
+
+```
+
+
+# V1- Remove Type 2 
+
+## Removing Type 2 From Dataset
+```{r echo=TRUE}
+
+Idents(SO) <- SO$subclass2_MD
+SO2 <- subset(SO, idents = c("type_2"), invert = TRUE)
+
+DimPlot(SO2)
+
+```
+
+## Reclustering new data
+
+This may be an overclustered Plot but I wanted to have room for rare/suttle differences
+
+
+```{r echo=TRUE}
+
+ElbowPlot(SO2)
+
+SO2 <- SCTransform(SO2) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:15) %>%
+    FindClusters(resolution = 0.6) %>%
+    RunUMAP(dims = 1:15)
+
+DimPlot(SO2)
+
+VlnPlot(SO2,c("Egf","Umod","Cldn19"),group.by = "subclass2_MD")
+
+```
+
+## Viewing Umod / Egf
+
+```{r}
+
+DimPlot(SO2)
+
+VlnPlot(SO2,c("Umod","Egf"))
+
+FeaturePlot(SO2,"Umod")
+
+```
+
+### Further QC Removing high expression of Umod/Egf 
+
+```{r}
+
+SO2 <- subset(SO2, idents = 10, invert = TRUE)
+
+
+SO2 <- SCTransform(SO2) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:15) %>%
+    FindClusters(resolution = 0.6) %>%
+    RunUMAP(dims = 1:15)
+
+DimPlot(SO2)
+
+v1markers<- FindAllMarkers(SO2, only.pos = TRUE, min.pct = 0.5, logfc.threshold = 0.5)
+
+v1markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1, p_val_adj < 0.05) %>%
+    slice_head(n = 5) %>%
+    ungroup() -> top3
+
+
+```
+
+
+### Top 3 Genes unique to each Cluster
+
+Some of these differences may be very minimal and some have no differences meaning they could be grouped as one.
+
+```{r}
+
+v1markers<- FindAllMarkers(SO2, only.pos = TRUE, min.pct = 0.5, logfc.threshold = 0.5)
+
+v1markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1, p_val_adj < 0.05) %>%
+    slice_head(n = 3) %>%
+    ungroup() -> top3
+
+DoHeatmap(SO2, features = top3$gene) + NoLegend()
+
+```
+
+### Creating Excel File for V1 markers
+
+```{r}
+
+
+marker_list <- split(v1markers, v1markers$cluster)
+
+
+# Sort names alphanumerically
+
+sorted_cluster_names <- names(marker_list)[order(as.numeric(names(marker_list)))]
+
+ 
+
+# Create a workbook
+
+wb <- createWorkbook()
+
+ 
+
+# Add each cluster as a new worksheet
+
+for (cluster_name in sorted_cluster_names) {
+
+  addWorksheet(wb, sheetName = cluster_name)
+
+  writeData(wb, sheet = cluster_name, marker_list[[cluster_name]])
+
+}
+
+ 
+
+date <- format(Sys.Date(), "%Y%m%d")
+
+ 
+
+# Save workbook
+
+saveWorkbook(wb, here("jk_code", paste0(date, "_", "_V1_FindAllMarkers_By_Cluster.xlsx")), overwrite = TRUE)
+
+```
+
+
+## View by Type
+
+```{r}
+
+SO2@meta.data <- SO2@meta.data %>%
+  mutate(subclass_MD = dplyr::case_when(
+    seurat_clusters %in% c(0,1,2,3,4,6,7,8,10) ~ "type_1",
+     seurat_clusters %in% c(5,9) ~ "type_2",
+    seurat_clusters == 11 ~ "type_3"
+  ))
+SO2@meta.data$subclass_MD <- factor(
+  SO2@meta.data$subclass_MD, 
+  levels = c("type_1","type_2", "type_3")
+)
+DimPlot(SO2,group.by = "subclass_MD")
+
+
+VlnPlot(SO2,c("Umod","Egf"))
+FeaturePlot(SO2,c("Umod","Egf"))
+
+```
+
+```{r}
+
+
+Idents(SO2) <- "subclass_MD"
+
+v1markers_2<- FindAllMarkers(SO2, only.pos = TRUE, min.pct = 0.25, logfc.threshold = 0.25)
+
+v1markers_2 %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 0.7, p_val_adj < 0.05) %>%
+    slice_head(n = 5) %>%
+    ungroup() -> top5
+
+DoHeatmap(SO2, features = top5$gene) + NoLegend()
+
+
+```
+### Excel File Creation for Type Markers
+
+```{r}
+
+
+marker_list <- split(v1markers_2, v1markers_2$cluster)
+
+
+# Sort names alphanumerically
+
+sorted_cluster_names <- names(marker_list)[order(as.numeric(names(marker_list)))]
+
+ 
+
+# Create a workbook
+
+wb <- createWorkbook()
+
+ 
+
+# Add each cluster as a new worksheet
+
+for (cluster_name in sorted_cluster_names) {
+
+  addWorksheet(wb, sheetName = cluster_name)
+
+  writeData(wb, sheet = cluster_name, marker_list[[cluster_name]])
+
+}
+
+ 
+
+date <- format(Sys.Date(), "%Y%m%d")
+
+ 
+
+# Save workbook
+
+saveWorkbook(wb, here("jk_code", paste0(date, "_", "_V1_FindAllMarkers_By_Type.xlsx")), overwrite = TRUE)
+
+```
+
+
+
+
+# V2 - Removing Umod/Egf Expression
+
+## Filtering out Umod > 0 
+
+```{r}
+
+VlnPlot(SO,c("Egf","Umod","Cldn19"))
+
+# If I remove too much Umod and Egf, The cell COunt drops way too low
+
+SO3 <- subset(SO, subset = !(Umod > 0))
+
+VlnPlot(SO3,c("Egf","Umod","Cldn19"))
+FeaturePlot(SO3,"Egf")
+DimPlot(SO3)
+
+
+```
+
+## Reclustering 
+
+```{r}
+
+
+SO3 <- SCTransform(SO3) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:15) %>%
+    FindClusters(resolution = 1) %>%
+    RunUMAP(dims = 1:15)
+
+DimPlot(SO3)
+
+
+```
+
+### Viewing Expression
+
+```{r}
+
+VlnPlot(SO3,c("Umod","Egf"))
+
+
+```
+
+
+## Viewing Markers by Cluster
+
+```{r}
+
+
+v2markers<- FindAllMarkers(SO3, only.pos = TRUE, min.pct = 0.5, logfc.threshold = 0.5)
+
+v2markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1, p_val_adj < 0.05) %>%
+    slice_head(n = 3) %>%
+    ungroup() -> top3v2
+
+DoHeatmap(SO3, features = top3v2$gene) + NoLegend()
+
+VlnPlot(SO3,c("Pappa2","Ptger3","Egr1","Aard"))
+
+```
+
+### Excel File v2 by cluster
+
+```{r}
+
+
+
+marker_list <- split(v2markers, v2markers$cluster)
+
+
+# Sort names alphanumerically
+
+sorted_cluster_names <- names(marker_list)[order(as.numeric(names(marker_list)))]
+
+ 
+
+# Create a workbook
+
+wb <- createWorkbook()
+
+ 
+
+# Add each cluster as a new worksheet
+
+for (cluster_name in sorted_cluster_names) {
+
+  addWorksheet(wb, sheetName = cluster_name)
+
+  writeData(wb, sheet = cluster_name, marker_list[[cluster_name]])
+
+}
+
+ 
+
+date <- format(Sys.Date(), "%Y%m%d")
+
+ 
+
+# Save workbook
+
+saveWorkbook(wb, here("jk_code", paste0(date, "_", "_V2_FindAllMarkers_By_Clustere.xlsx")), overwrite = TRUE)
+
+```
+

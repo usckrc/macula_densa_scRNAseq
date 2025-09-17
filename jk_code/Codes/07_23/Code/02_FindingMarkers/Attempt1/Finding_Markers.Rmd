@@ -1,0 +1,303 @@
+---
+title: "macula densa subtype analysis "
+author: "jeff karnsomprot"
+date: "2025-04-18"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: journal
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+
+---
+# Macula Densa Project
+
+## Objectives 
+
+Three Main Goals of this File <br>
+Produce Cleaner looking code. <br> 
+Identify the amount of clusters there are <br>
+Identify the top genes expressed in each of the clusters <br>
+
+
+# Loading in Data sets + Library packages.
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!requireNamespace('BiocManager', quietly = TRUE)) {install.packages('BiocManager'); require("BiocManager")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("sctransform")) {install.packages("sctransform"); require("sctransform")}
+if (!require("glmGamPoi")) {BiocManager::install('glmGamPoi'); require("glmGamPoi")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("EnhancedVolcano")) {BiocManager::install('EnhancedVolcano'); require("EnhancedVolcano")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("gghighlight")) {install.packages("gghighlight"); require("gghighlight")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("gplots")) {install.packages("gplots"); require("gplots")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+
+# Install from scratch
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("RSQLite")  # Core dependency
+BiocManager::install("org.Mm.eg.db")
+BiocManager::install("clusterProfiler")
+
+
+
+
+library("EnhancedVolcano")
+library(UpSetR)
+
+```
+
+
+```{r}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+
+
+``` {r}
+load(here("jk_code", "JK_clean_MD.rds"))
+
+```
+
+# Analyzing DATASET
+
+``` {r}
+
+
+SO4@meta.data$sample <- factor(
+  SO4@meta.data$sample, 
+  levels = c("SO1","SO4","SO2","SO3"))
+  
+  
+DimPlot(SO4,split.by ="sample",group.by = "sample")
+DimPlot(SO4,group.by = "subclass2_MD",split.by = "sample")
+DimPlot(SO4,group.by = "subclass_MD",split.by = "treatment")
+DimPlot(SO4,group.by = "subclass2_MD",split.by = "treatment")
+
+
+DimPlot(SO4)
+
+```
+
+## Viewing for different DEGs
+
+```{r}
+
+
+markers.to.plot1 <- c(
+  "Atf3",     # 
+  "Egr1",     # 
+  "Fos",      # 
+  "Jun",      #
+  "Junb",     #
+  "Pappa2",   #
+  "Cxcl10",   # 
+  "Cldn19",   # 
+  "Krt7",     #
+  "Egf",      #
+  "Ptger3",
+  "Ckb",
+  "Mcub",
+  "Fabp3",
+  "Foxq1",
+  "Vash2",
+  "Pamr1",
+  "Vegfa"
+)
+
+
+                      
+DotPlot(SO4,
+features = markers.to.plot1,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+group.by = "seurat_clusters",
+col.max = 2.5)+
+coord_flip()
+
+DimPlot(SO4,group.by = "seurat_clusters")
+DimPlot(SO4,split.by = "treatment",group.by = "seurat_clusters")
+
+```
+
+## Finding Markers for each MD Subtype + Saving Excel File
+
+```{r}
+
+Idents(SO4) <- "subclass2_MD"
+
+MD_DEGs <- FindAllMarkers(SO4, 
+                          only.pos = TRUE,
+                          logfc.threshold = 0.1,
+                          min.pct = 0.1,
+                          min.diff.pct = 0.1,
+                          return.thresh = 0.05)
+ 
+MD_DEGs <- MD_DEGs %>%
+  arrange(desc(avg_log2FC)) %>%
+  dplyr::select(gene, everything())
+
+# Split by cluster (ident column)
+
+marker_list <- split(MD_DEGs, MD_DEGs$cluster)
+
+ 
+
+# Sort names alphanumerically
+
+sorted_cluster_names <- names(marker_list)[order(as.numeric(names(marker_list)))]
+
+ 
+
+# Create a workbook
+
+wb <- createWorkbook()
+
+ 
+
+# Add each cluster as a new worksheet
+
+for (cluster_name in sorted_cluster_names) {
+
+  addWorksheet(wb, sheetName = cluster_name)
+
+  writeData(wb, sheet = cluster_name, marker_list[[cluster_name]])
+
+}
+
+ 
+
+date <- format(Sys.Date(), "%Y%m%d")
+
+ 
+
+# Save workbook
+
+saveWorkbook(wb, here("jk_code", paste0(date, "_", "_SO4_FindAllMarkers_By_SubType.xlsx")), overwrite = TRUE)
+
+
+MD_DEGs %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1, p_val_adj < 0.05) %>%
+    slice_head(n = 10) %>%
+    ungroup() -> top10
+
+# save as excel file
+
+DoHeatmap(SO4, features = top10$gene) + NoLegend()
+
+top10
+
+```
+
+
+## Finding markers between each type now
+
+### Type 1a Markers
+
+```{r}
+
+type_1 <- c("Pappa2","Ramp3","Itga4","Aard")
+
+VlnPlot(SO4,type_1,)
+
+
+```
+
+### Type 2 Markers
+
+```{r}
+
+type_2a <- c("Egf","Umod","Cxcl12","Ckb")
+
+VlnPlot(SO4,type_2a)
+
+
+```
+
+### Type 2b Markers
+
+```{r}
+
+type_2b <- c("Foxq1","Slc9a3","Sult1d1","Tmem52b")
+
+VlnPlot(SO4,type_2b)
+
+
+```
+
+### Type 3 Markers
+
+```{r}
+
+type_3 <- c("Jun","Fos","Egr1","Hspa1a")
+
+VlnPlot(SO4,type_3)
+
+
+```
+
+
+### Type 4 Markers
+
+```{r}
+
+type_4 <- c("Cxcl10","Isg15","Ifit1")
+
+VlnPlot(SO4,type_4)
+
+
+```
+
+
+## Top Genes for each type 
+
+```{r}
+
+type_markers <- c(type_1, type_2a, type_2b, type_3, type_4)
+
+                      
+                      
+DotPlot(SO4,
+features = type_markers,
+dot.scale = 8,
+dot.min = 0,
+scale = FALSE,
+scale.max = 100,
+scale.min = 0,
+col.min = -2.5,
+col.max = 2.5)+
+coord_flip()
+
+```
+

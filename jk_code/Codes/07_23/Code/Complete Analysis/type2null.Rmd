@@ -1,0 +1,94 @@
+---
+title: "Type2NULL"
+author: "jeff karnsomprot"
+date: "2025-09-10"
+output: html_document
+---
+
+JK_clean_MD.rds
+
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("BiocManager")) {install.packages("BiocManager"); require("BiocManager")}
+if (!require("tibble")) {install.packages("tibble"); require("tibble")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")} #color
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("kableExtra")) {install.packages("kableExtra"); require("kableExtra")} # for color brewer
+if (!require("gplots")) {install.packages("gplots"); require("gplots")} # for color brewer
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("plotly")) {install.packages("plotly"); require("plotly")}
+library("EnhancedVolcano")
+
+
+
+```
+
+
+```{r}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+
+``` {r}
+
+load(here("jk_code", "JK_clean_MD.rds"))
+
+SO <- SO4
+
+rm(SO4)
+
+```
+
+```{r}
+
+DimPlot(SO,group.by = "subclass2_MD")
+
+
+
+Idents(SO) <- SO$subclass2_MD
+
+SO2 <- subset(SO, idents = c("type_2"), invert = TRUE)
+
+
+DimPlot(SO2)
+
+SO2 <- SCTransform(SO2) %>%
+    RunPCA() %>%
+    FindNeighbors(dims = 1:15) %>%
+    FindClusters(resolution = 0.7) %>%
+    RunUMAP(dims = 1:15)
+
+DimPlot(SO2)
+
+
+```
+```{r}
+
+all_markers <- FindAllMarkers(SO2, only.pos = TRUE, min.pct = 0.5, logfc.threshold = 0.5)
+
+all_markers %>%
+    group_by(cluster) %>%
+    dplyr::filter(avg_log2FC > 1, p_val_adj < 0.05) %>%
+    slice_head(n = 5) %>%
+    ungroup() -> top3
+
+DoHeatmap(SO2, features = top3$gene) + NoLegend()
+
+```

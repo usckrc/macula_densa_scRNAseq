@@ -1,0 +1,228 @@
+---
+title: "Pathway_Analysis (4 Types)"
+author: "jeff karnsomprot"
+date: "2025-07-08"
+output:
+  html_document: 
+    toc: yes
+    toc_depth: 3
+    toc_float: true
+    number_sections: yes
+    theme: journal
+    df_print: paged
+    code_folding: hide
+    highlight: pygments
+---
+
+# Loading in Data sets + Library packages.
+
+```{r load new packages, echo=FALSE, warning=FALSE, error=FALSE, message=FALSE}
+
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+if (!require("knitr")) {install.packages("knitr"); require("knitr")}
+if (!requireNamespace('BiocManager', quietly = TRUE)) {install.packages('BiocManager'); require("BiocManager")}
+if (!require("dplyr")) {install.packages("dplyr"); require("dplyr")}
+if (!require("stringr")) {install.packages("stringr"); require("stringr")}
+if (!require("Seurat")) {install.packages("Seurat"); require("Seurat")}
+if (!require("sctransform")) {install.packages("sctransform"); require("sctransform")}
+if (!require("glmGamPoi")) {BiocManager::install('glmGamPoi'); require("glmGamPoi")}
+if (!require("patchwork")) {install.packages("patchwork"); require("patchwork")}
+if (!require("ggplot2")) {install.packages("ggplot2"); require("ggplot2")}
+if (!require("EnhancedVolcano")) {BiocManager::install('EnhancedVolcano'); require("EnhancedVolcano")}
+if (!require("DESeq2")) {BiocManager::install('DESeq2'); require("DESeq2")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")}
+if (!require("RColorBrewer")) {install.packages("RColorBrewer"); require("RColorBrewer")}
+if (!require("car")) {install.packages("car"); require("car")}
+if (!require("openxlsx")) {install.packages("openxlsx"); require("openxlsx")}
+if (!require("readxl")) {install.packages("readxl"); require("readxl")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+if (!require("gghighlight")) {install.packages("gghighlight"); require("gghighlight")}
+if (!require("ggpmisc")) {install.packages("ggpmisc"); require("ggpmisc")}
+if (!require("data.table")) {install.packages("data.table"); require("data.table")}
+if (!require("here")) {install.packages("here"); require("here")}
+if (!require("clusterProfiler")) {BiocManager::install('clusterProfiler'); require("clusterProfiler")}
+if (!require("enrichplot")) {BiocManager::install('enrichplot'); require("enrichplot")}
+if (!require("tidyverse")) {install.packages("tidyverse"); require("tidyverse")} # for data frame transformation
+if (!require("gplots")) {install.packages("gplots"); require("gplots")}
+if (!require("ggvenn")) {install.packages("ggvenn"); require("ggvenn")}
+if (!require("ggrepel")) {install.packages("ggrepel"); require("ggrepel")}
+
+
+# Remove corrupted installation
+remove.packages(c("RSQLite", "org.Mm.eg.db", "clusterProfiler"))
+
+# Install from scratch
+if (!require("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+
+BiocManager::install("RSQLite")  # Core dependency
+BiocManager::install("org.Mm.eg.db")
+BiocManager::install("clusterProfiler")
+
+
+# CRAN packages
+install.packages(c("dplyr", "magrittr"))
+library(org.Mm.eg.db)
+library(clusterProfiler)
+library(AnnotationDbi)
+library(dplyr)
+library(magrittr)
+
+
+
+
+library("EnhancedVolcano")
+library(UpSetR)
+
+```
+
+
+```{r}
+options(future.globals.maxSize = 74 * 1024^3) # 55 GB
+getOption("future.globals.maxSize") #59055800320
+```
+
+```{r}
+
+load(here("jk_code", "JK_clean_MD_2.rds"))
+```
+
+
+# Top genes
+
+```{r}
+
+Idents(SO4) <- "manual_groups"
+
+type_markers <- FindAllMarkers(SO4, 
+                          only.pos = TRUE,
+                          logfc.threshold = 0.2,
+                          min.pct = 0.1,
+                          min.diff.pct = 0.05,
+                          return.thresh = 0.05)
+
+
+
+```
+
+
+```{r}
+
+type_1a_markers <- type_markers[type_markers$cluster == "type_1a", ]
+type_1b_markers <- type_markers[type_markers$cluster == "type_1b", ]
+type_1c_markers <- type_markers[type_markers$cluster == "type_1c", ]
+type_2a_markers <- type_markers[type_markers$cluster == "type_2a", ]
+type_2b_markers <- type_markers[type_markers$cluster == "type_2b", ]
+type_3a_markers <- type_markers[type_markers$cluster == "type_3a", ]
+type_3b_markers <- type_markers[type_markers$cluster == "type_3b", ]
+type_4_markers <- type_markers[type_markers$cluster == "type_4", ]
+type_5_markers <- type_markers[type_markers$cluster == "type_5", ]
+type_6_markers <- type_markers[type_markers$cluster == "type_6", ]
+
+```
+
+# Create function
+
+```{r}
+
+# Optional P-val Filter, Filter Before Independently before you Run this
+
+# Creating a function to Repeat Easily
+
+pathway_analysis <- function(type_markers, type_name)
+  {
+  # Arrange markers by log2 fold change
+  df2 <- type_markers %>% arrange(desc(avg_log2FC))
+  
+  DEG_list <- df2
+  
+markers <- DEG_list %>% mutate(SYMBOL = gene)
+
+
+ENTREZ_list <- bitr(
+  geneID = DEG_list$gene,
+  fromType = "SYMBOL",
+  toType = "ENTREZID",
+  OrgDb = org.Mm.eg.db
+)
+  markers <- ENTREZ_list %>% inner_join(markers, by = "SYMBOL")
+  
+  # Upregulated Pathway Code
+  pos_markers_up <- markers %>% dplyr::filter(avg_log2FC > 0) %>% arrange(desc(abs(avg_log2FC)))
+  pos_ranks_up <- pos_markers_up$ENTREZID[abs(pos_markers_up$avg_log2FC) > 0]
+  pos_go_up <- enrichGO(gene = pos_ranks_up, OrgDb = "org.Mm.eg.db", ont = "BP", readable = TRUE)
+  chart_up <- dotplot(pos_go_up) +
+    ggtitle(paste(type_name, "Function")) +
+    theme_classic() +
+    theme(
+      plot.title = element_text(hjust = 0.5),
+      legend.position = "left",
+      axis.text.y = element_text(hjust = 0, size = 10)
+    ) +
+    scale_y_discrete(position = "right", labels = function(x) str_wrap(x, width = 25))
+  
+
+  return(list(
+    chart_up = chart_up,
+    pos_go_up = pos_go_up
+  ))
+}
+
+```
+
+```{r}
+
+results_type_1a <- pathway_analysis(subset(type_1a_markers, avg_log2FC > 0), "type_1a")
+results_type_1b <- pathway_analysis(subset(type_1b_markers, avg_log2FC > 0.4), "type_1b")
+results_type_1c <- pathway_analysis(subset(type_1c_markers, avg_log2FC > 0), "type_1c")
+results_type_2a <- pathway_analysis(subset(type_2a_markers, avg_log2FC > 0), "type_2a")
+results_type_2b <- pathway_analysis(subset(type_2b_markers, avg_log2FC > 0), "type_2b")
+results_type_3a <- pathway_analysis(subset(type_3a_markers, avg_log2FC > 0.3), "type_3a")
+results_type_3b <- pathway_analysis(subset(type_3b_markers, avg_log2FC > 1), "type_3b")
+results_type_4 <- pathway_analysis(subset(type_4_markers, avg_log2FC > 2), "type_4")
+results_type_5 <- pathway_analysis(subset(type_5_markers, avg_log2FC > 0), "type_5")
+results_type_6 <- pathway_analysis(subset(type_6_markers, avg_log2FC > 0), "type_6")
+
+results_type_1a 
+results_type_1b 
+results_type_1c 
+results_type_2a 
+results_type_2b
+results_type_3a
+results_type_3b 
+results_type_4 
+results_type_5 
+results_type_6 
+
+
+
+```
+
+# Saving Excel File
+
+```{r}
+
+
+pathway_list <- list(
+  "type 1" = pos_go1@result,
+  "type 2" = pos_go2@result,
+  "type 3" = pos_go3@result,
+  "type 4" = pos_go4@result,
+  "type 5" = pos_go4@result,
+  "type 6" = pos_go4@result
+)
+
+
+wb <- createWorkbook()
+
+
+for (sheet_name in names(pathway_list)) {
+  addWorksheet(wb, sheet_name)
+  writeData(wb, sheet_name, pathway_list[[sheet_name]])
+}
+
+# Save the workbook
+saveWorkbook(wb, here("jk_code", "supergroup_MD_DEGs.xlsx"), overwrite = TRUE)
+
+```
+
